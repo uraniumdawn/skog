@@ -1,0 +1,15 @@
+skog:
+  api:
+    timeout: 30 # AWS API call timeout in seconds
+  s3:
+    # Entries (folders + objects) one request asks for, and so the rows an objects page loads at
+    # a time. <n> asks for another such batch. The S3 API caps a response at 1000 entries however
+    # much is asked for, so higher values are clamped to 1000.
+    max_requested_entries: 1000
+    # Safety cap on how many keys <s> walks when aggregating a folder or a bucket. An aggregate
+    # that hits the cap is shown with a ">" marker, since its figures are a floor. Set to 0 for
+    # no cap: every aggregate is then exact, and <Esc> is what ends a long walk.
+    max_scanned_keys: 100000
+  # Path to a style file overriding default_style.yaml. Relative paths and ~ are resolved
+  # against your home directory; see examples/style.
+  style: ""
