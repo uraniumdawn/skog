@@ -1,0 +1,19 @@
+skog:
+  # The AWS profile skog works with. It is written here when you select a profile on the
+  # Profiles page, so it is restored on the next start. The profile itself — its region,
+  # endpoint and credentials — is read from ~/.aws/config and ~/.aws/credentials, which skog
+  # never writes to.
+  profile: minio-prod
+  api:
+    timeout: 30 # AWS API call timeout in seconds
+  s3:
+    # Entries one request asks for, and so the rows an objects page shows at a time; <n> asks for
+    # another batch of the same size. The S3 API returns at most 1000 entries per response, so
+    # anything larger is clamped to 1000.
+    max_requested_entries: 1000
+    # Cap on the keys <s> walks when aggregating a folder or a bucket: S3 reports nothing about
+    # what a prefix holds, so the figures cost one request per thousand keys. An aggregate that
+    # hits the cap is marked with ">", its figures being a floor rather than a total. Set to 0 for
+    # no cap — every aggregate is then exact, however long the walk takes, and <Esc> ends it.
+    max_scanned_keys: 100000
+  style: examples/style/uranium_v3.yaml
