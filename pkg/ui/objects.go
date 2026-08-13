@@ -36,6 +36,18 @@ func (app *App) Objects(target ObjectsTarget) {
 	)
 }
 
+// deleteObject removes one object and calls done on the UI goroutine once S3 has accepted it.
+func (app *App) deleteObject(bucket, key string, done func()) {
+	path := s3.DisplayPath(bucket, key)
+
+	perform(app, "deleting "+path, "deleted "+path,
+		func(ctx context.Context, client *s3.Client) error {
+			return client.DeleteObject(ctx, bucket, key)
+		},
+		done,
+	)
+}
+
 // moreObjects loads the next batch of an opened level and hands it to add.
 func (app *App) moreObjects(
 	path string,
@@ -99,7 +111,7 @@ func (app *App) showObjects(pageKey, path string, listing *s3.Listing) {
 		if event.Key() == tcell.KeyCtrlU {
 			// The refreshed page starts with no aggregates, so a scan filling in the rows of the
 			// page being replaced has nothing left to fill.
-			app.CancelScan()
+			app.CancelJob()
 			Publish(
 				S3Channel,
 				GetObjectsEventType,
@@ -109,7 +121,7 @@ func (app *App) showObjects(pageKey, path string, listing *s3.Listing) {
 		}
 
 		if event.Key() == tcell.KeyEsc {
-			if app.CancelScan() {
+			if app.CancelJob() {
 				return nil
 			}
 			return event
@@ -145,6 +157,49 @@ func (app *App) showObjects(pageKey, path string, listing *s3.Listing) {
 			app.ScanPrefix(listing.Bucket, entry.full, func(stats *s3.PrefixStats) {
 				entry.statCells = cellsOf(stats)
 				renderStatCells(table, visible, entry, objectStatsColumn, entry.statCells)
+			})
+			return nil
+		}
+
+		if IsKey(event, 'd') {
+			entry := selected()
+			if entry == nil {
+				return nil
+			}
+
+			// A folder brings every key under it along; an object is just itself.
+			app.Download(listing.Bucket, entry.full, entry.folder)
+			return nil
+		}
+
+		if event.Key() == tcell.KeyCtrlD {
+			entry := selected()
+			if entry == nil {
+				return nil
+			}
+			if entry.folder {
+				SendStatusWithDefaultTTL("<C-d> deletes an object; this row is a folder")
+				return nil
+			}
+
+			key := entry.full
+			// The row the cursor is on now, so deleting several keys one after another does not
+			// send it back to the top of the level on every re-render.
+			row, _ := table.GetSelection()
+
+			// The question names no key: one can be long enough to push the answer off the
+			// status line, and the row it acts on is the highlighted one anyway.
+			app.Modify("Delete the selected object?", func() {
+				app.deleteObject(listing.Bucket, key, func() {
+					rows = withoutKey(rows, key)
+					render(app.CurrentFilters[pageKey])
+					if count := table.GetRowCount(); count > 1 {
+						if row >= count {
+							row = count - 1
+						}
+						table.Select(row, 0)
+					}
+				})
 			})
 			return nil
 		}
@@ -206,6 +261,17 @@ func appendBatch(rows []*objectRow, batch *s3.Listing) []*objectRow {
 		}
 		return rows[i].full < rows[j].full
 	})
+	return rows
+}
+
+// withoutKey drops the row holding the given key, leaving the rest in place. A page never holds
+// the same key twice, so the first match is the only one.
+func withoutKey(rows []*objectRow, key string) []*objectRow {
+	for i, entry := range rows {
+		if entry.full == key {
+			return append(rows[:i:i], rows[i+1:]...)
+		}
+	}
 	return rows
 }
 

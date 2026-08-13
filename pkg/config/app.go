@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -29,8 +30,12 @@ type Config struct {
 		API     APIConfig `yaml:"api,omitempty"`
 		// S3 carries no omitempty: an all-default S3Config is the zero struct, and omitting the
 		// section on a save would drop an uncapped max_scanned_keys with it.
-		S3    S3Config `yaml:"s3"`
-		Style string   `yaml:"style,omitempty"`
+		S3       S3Config       `yaml:"s3"`
+		Download DownloadConfig `yaml:"download"`
+		Style    string         `yaml:"style,omitempty"`
+		// Modes is the mode of each profile that is not in the default one, keyed by profile
+		// name. See Mode; <Tab> on the Profiles page is what writes here.
+		Modes map[string]string `yaml:"modes,omitempty"`
 	} `yaml:"skog"`
 }
 
@@ -55,6 +60,14 @@ type S3Config struct {
 	MaxScannedKeys int `yaml:"max_scanned_keys"`
 }
 
+// DownloadConfig holds where <d> writes what it fetches.
+type DownloadConfig struct {
+	// Dir is the folder downloads are written into, as <dir>/<bucket>/<key>. Environment
+	// variables are expanded, and "~" and a relative path both resolve against the home
+	// directory: skog is started from whatever directory the shell happened to be in.
+	Dir string `yaml:"dir"`
+}
+
 const (
 	// Unlimited is the MaxScannedKeys value that lifts the cap on a recursive aggregate.
 	Unlimited = 0
@@ -75,6 +88,11 @@ func (c *Config) GetMaxRequestedEntries() int {
 // GetMaxScannedKeys returns the cap on a recursive aggregate, Unlimited (zero) for no cap.
 func (c *Config) GetMaxScannedKeys() int {
 	return c.Skog.S3.MaxScannedKeys
+}
+
+// DownloadDir returns the folder downloads are written into, as an absolute path.
+func (c *Config) DownloadDir() (string, error) {
+	return ResolveUserPath(c.Skog.Download.Dir)
 }
 
 // SelectedProfile returns the remembered profile name, empty when none was selected yet.
@@ -142,6 +160,21 @@ func validate(cfg, def *Config) {
 			Int("limit", MaxEntriesPerRequest).
 			Msg("s3.max_requested_entries above what S3 returns, using the limit")
 		cfg.Skog.S3.MaxRequestedEntries = MaxEntriesPerRequest
+	}
+	// A misspelled mode is dropped rather than kept: a profile skog cannot make sense of the
+	// mode of is worked with in the default one, and the file should say so.
+	for profile, mode := range cfg.Skog.Modes {
+		if !Mode(mode).valid() {
+			log.Warn().Str("profile", profile).Str("value", mode).
+				Str("default", string(Regular)).Msg("invalid mode, using default")
+			delete(cfg.Skog.Modes, profile)
+		}
+	}
+	// An empty download folder is no folder at all, so <d> would have nowhere to write.
+	if strings.TrimSpace(cfg.Skog.Download.Dir) == "" {
+		log.Warn().Str("default", def.Skog.Download.Dir).
+			Msg("empty download.dir, using default")
+		cfg.Skog.Download.Dir = def.Skog.Download.Dir
 	}
 	// Unlimited is a deliberate setting, so only values below it are typos.
 	if cfg.Skog.S3.MaxScannedKeys < Unlimited {

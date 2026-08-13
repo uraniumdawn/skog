@@ -10,6 +10,19 @@ skog:
     # that hits the cap is shown with a ">" marker, since its figures are a floor. Set to 0 for
     # no cap: every aggregate is then exact, and <Esc> is what ends a long walk.
     max_scanned_keys: 100000
+  download:
+    # Where <d> writes what it fetches: an object lands in <dir>/<bucket>/<key>, a folder brings
+    # every key under it along, keeping the hierarchy. Environment variables are expanded, and
+    # "~" and a relative path both resolve against your home directory. An existing file of the
+    # same name is overwritten. A recursive download stops at s3.max_scanned_keys.
+    dir: "~/Downloads/skog"
+  # How much skog may change what a profile points at, keyed by profile name. <Tab> on the
+  # Profiles page switches the highlighted profile to the next mode and saves it here:
+  #   read-only  a modifying action is refused
+  #   regular    a modifying action asks in the status line first, answered with <Y> or <N>
+  #   yolo       a modifying action runs straight away, with no question asked
+  # A profile not listed here is regular, so this holds only what differs from it.
+  modes: {}
   # Path to a style file overriding default_style.yaml. Relative paths and ~ are resolved
   # against your home directory; see examples/style.
   style: ""

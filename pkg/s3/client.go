@@ -261,6 +261,18 @@ func (c *Client) HeadObject(ctx context.Context, bucket, key string) (*ObjectInf
 	}, nil
 }
 
+// DeleteObject removes a single object.
+//
+// On a versioned bucket this writes a delete marker rather than removing the data: the object
+// disappears from a listing, but its versions remain until they are deleted explicitly.
+func (c *Client) DeleteObject(ctx context.Context, bucket, key string) error {
+	_, err := c.api.DeleteObject(ctx, &awss3.DeleteObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	return err
+}
+
 // String renders the object metadata for the description page.
 func (o *ObjectInfo) String() string {
 	var sb strings.Builder

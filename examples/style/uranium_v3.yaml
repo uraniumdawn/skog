@@ -21,7 +21,11 @@ skog:
   selection:
     fgColor: "#272727"
     bgColor: "#ebdbb2"
-  itle: "orange"
+  mode:
+    readOnly: "default"
+    regular: "default"
+    yolo: "red"
+  title: "orange"
   border: "#ebdbb2"
   background: "#272727"
   foreground: "#ebdbb2"

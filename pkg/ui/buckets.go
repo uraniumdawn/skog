@@ -65,13 +65,13 @@ func (app *App) showBuckets(pageKey, profile string, buckets []s3.Bucket) {
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlU {
 			// See showObjects: the page being replaced is no longer worth scanning for.
-			app.CancelScan()
+			app.CancelJob()
 			Publish(S3Channel, GetBucketsEventType, Payload{nil, true})
 			return nil
 		}
 
 		if event.Key() == tcell.KeyEsc {
-			if app.CancelScan() {
+			if app.CancelJob() {
 				return nil
 			}
 			return event

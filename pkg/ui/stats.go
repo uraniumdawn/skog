@@ -95,26 +95,24 @@ func renderStatCells[R comparable](
 //
 // How deep the walk goes is the user's setting alone: s3.max_scanned_keys, zero for no cap.
 //
-// Only one scan runs at a time: it walks the whole subtree, so letting them pile up would spend
-// the user's requests on rows they are no longer looking at. CancelScan stops the running one.
+// A scan holds the job slot for as long as it runs, so only one is ever in flight; see job.go.
 func (app *App) ScanPrefix(bucket, prefix string, done func(*s3.PrefixStats)) {
 	path := s3.DisplayPath(bucket, prefix)
 
-	if !app.beginScan() {
-		SendStatusWithDefaultTTL("[red]a scan is already running, press <Esc> to cancel it")
+	if !app.beginJob("a scan") {
 		return
 	}
 
 	// A scan spends one request per page of keys, so the single-call timeout does not apply to it:
 	// it ends when it is done, when the user cancels it, or when the application exits.
 	ctx, cancel := context.WithCancel(app.ctx)
-	app.setScanCancel(cancel)
+	app.setJobCancel(cancel)
 
 	SendStatusInfinite("scanning " + path + " (<Esc> to cancel)")
 
 	go func() {
 		defer cancel()
-		defer app.endScan()
+		defer app.endJob()
 
 		// The row hears about every outcome: a cancelled or failed scan has to take the
 		// "scanning" cells back off it.
@@ -178,47 +176,4 @@ func scanSummary(path string, stats *s3.PrefixStats) string {
 		summary += " (partial: scanned-keys cap reached)"
 	}
 	return summary
-}
-
-// CancelScan stops the running scan, if any, and reports whether there was one.
-func (app *App) CancelScan() bool {
-	app.scanMu.Lock()
-	cancel := app.scanCancel
-	app.scanCancel = nil
-	app.scanMu.Unlock()
-
-	if cancel == nil {
-		return false
-	}
-	cancel()
-	return true
-}
-
-// beginScan claims the single scan slot, reporting whether it was free.
-func (app *App) beginScan() bool {
-	app.scanMu.Lock()
-	defer app.scanMu.Unlock()
-
-	if app.scanning {
-		return false
-	}
-	app.scanning = true
-	return true
-}
-
-// endScan releases the scan slot.
-func (app *App) endScan() {
-	app.scanMu.Lock()
-	defer app.scanMu.Unlock()
-
-	app.scanning = false
-	app.scanCancel = nil
-}
-
-// setScanCancel records how to cancel the running scan.
-func (app *App) setScanCancel(cancel context.CancelFunc) {
-	app.scanMu.Lock()
-	defer app.scanMu.Unlock()
-
-	app.scanCancel = cancel
 }

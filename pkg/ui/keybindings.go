@@ -113,6 +113,12 @@ func (app *App) OpenPagesKeyHandler(filteredTable *tview.Table) {
 
 func (app *App) MainOperationKeyHandler() {
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// tview runs the application-wide capture before the focused primitive's own, so
+		// returning nil here is what blocks the application while a question stands.
+		if app.answer(event) {
+			return nil
+		}
+
 		if IsKey(event, ':') {
 			if !app.IsSearchInFocus() && !app.IsInputFieldInFocus() {
 				currentPage, _ := app.Layout.PagesRegistry.UI.Pages.GetFrontPage()

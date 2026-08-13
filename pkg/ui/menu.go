@@ -79,6 +79,18 @@ var keys = map[string]Pair{
 		Key:   "<H,L>",
 		Value: "Scroll Left/Right",
 	},
+	"delete": {
+		Key:   "<C-d>",
+		Value: "Delete",
+	},
+	"download": {
+		Key:   "<d>",
+		Value: "Download",
+	},
+	"mode": {
+		Key:   "<Tab>",
+		Value: "Mode",
+	},
 	"remove_page": {
 		Key:   "<x>",
 		Value: "Remove page",
@@ -135,6 +147,7 @@ func NewMenu(colors *config.ColorConfig) *Menu {
 			ProfilesPageMenu: {
 				"sel",
 				"select",
+				"mode",
 				"res",
 				"opened",
 				"forward",
@@ -153,6 +166,8 @@ func NewMenu(colors *config.ColorConfig) *Menu {
 				"sel",
 				"open",
 				"stat",
+				"download",
+				"delete",
 				"res",
 				"search",
 				"upd",
@@ -164,6 +179,8 @@ func NewMenu(colors *config.ColorConfig) *Menu {
 				"open",
 				"stat",
 				"more",
+				"download",
+				"delete",
 				"res",
 				"search",
 				"upd",

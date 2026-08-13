@@ -119,6 +119,45 @@ func fetch[T any](
 ) {
 	SendStatusInfinite(what)
 
+	withClient(app, what, func(ctx context.Context, client *s3.Client) error {
+		result, err := call(ctx, client)
+		if err != nil {
+			return err
+		}
+
+		app.QueueUpdateDraw(func() {
+			render(result)
+			ClearStatus()
+		})
+		return nil
+	})
+}
+
+// perform runs an S3 call that changes something off the UI goroutine, applies apply on the UI
+// goroutine and leaves done in the status line. Unlike fetch it does not clear the status line:
+// a change has no result to render, so what happened is what is worth reporting.
+func perform(
+	app *App,
+	what, done string,
+	call func(context.Context, *s3.Client) error,
+	apply func(),
+) {
+	SendStatusInfinite(what)
+
+	withClient(app, what, func(ctx context.Context, client *s3.Client) error {
+		if err := call(ctx, client); err != nil {
+			return err
+		}
+
+		app.QueueUpdateDraw(apply)
+		SendStatusWithDefaultTTL(done)
+		return nil
+	})
+}
+
+// withClient runs fn off the UI goroutine against the selected profile's client, under the
+// configured API call timeout, and reports a failure in the status line.
+func withClient(app *App, what string, fn func(context.Context, *s3.Client) error) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), app.Config.GetAPICallTimeout())
 		defer cancel()
@@ -129,16 +168,9 @@ func fetch[T any](
 			return
 		}
 
-		result, err := call(ctx, client)
-		if err != nil {
+		if err := fn(ctx, client); err != nil {
 			failed(what, err)
-			return
 		}
-
-		app.QueueUpdateDraw(func() {
-			render(result)
-			ClearStatus()
-		})
 	}()
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/uraniumdawn/skog/pkg/awscfg"
+	"github.com/uraniumdawn/skog/pkg/config"
 )
 
 // GetProfilesEventType opens the AWS profiles page.
@@ -24,8 +25,12 @@ var ProfilesChannel = make(chan Event)
 // activeMarker marks the selected profile in the profiles list.
 const activeMarker = "✓"
 
-// activeColumn is the index of the "Active" column in the profiles table.
-const activeColumn = 5
+const (
+	// modeColumn is the index of the "Mode" column in the profiles table, the one <Tab> switches.
+	modeColumn = 5
+	// activeColumn is the index of the "Active" column in the profiles table.
+	activeColumn = 6
+)
 
 // RunProfilesEventHandler processes profile events from the channel.
 func (app *App) RunProfilesEventHandler(ctx context.Context, in chan Event) {
@@ -90,7 +95,7 @@ func (app *App) NewProfilesTable() *tview.Table {
 }
 
 func setProfilesTableHeader(table *tview.Table, labelColor tcell.Color) {
-	headers := []string{"Name", "Region", "Endpoint", "Credentials", "Source", "Active"}
+	headers := []string{"Name", "Region", "Endpoint", "Credentials", "Source", "Mode", "Active"}
 	for col, text := range headers {
 		table.SetCell(0, col, tview.NewTableCell(text).
 			SetSelectable(false).
@@ -114,6 +119,11 @@ func (app *App) setProfileRow(table *tview.Table, row int, profile *awscfg.Profi
 		SetCell(row, 2, tview.NewTableCell(endpoint)).
 		SetCell(row, 3, tview.NewTableCell(credentials)).
 		SetCell(row, 4, tview.NewTableCell(profileSource(profile))).
+		SetCell(
+			row,
+			modeColumn,
+			tview.NewTableCell(string(app.Config.ProfileMode(profile.Name))),
+		).
 		SetCell(row, activeColumn, tview.NewTableCell(app.activeMark(profile)))
 }
 
@@ -138,16 +148,42 @@ func profileSource(profile *awscfg.Profile) string {
 	}
 }
 
-// ProfilesTableInputHandler wires Enter: selecting the profile to work with.
+// ProfilesTableInputHandler wires the keys of the profiles table: Enter selects the profile to
+// work with, Tab switches the mode it is worked with.
 func (app *App) ProfilesTableInputHandler(table *tview.Table) {
+	// profile returns the profile the cursor is on, nil on the header or an unknown name.
+	profileAt := func() (int, *awscfg.Profile) {
+		row, _ := table.GetSelection()
+		if row < 1 || row > len(app.Profiles) {
+			return row, nil
+		}
+		return row, app.ProfileByName(table.GetCell(row, 0).Text)
+	}
+
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEnter {
-			row, _ := table.GetSelection()
-			if row < 1 || row > len(app.Profiles) {
+		if event.Key() == tcell.KeyTab {
+			row, profile := profileAt()
+			if profile == nil {
 				return nil
 			}
-			name := table.GetCell(row, 0).Text
-			profile := app.ProfileByName(name)
+
+			mode := config.NextMode(app.Config.ProfileMode(profile.Name))
+			app.Config.SetProfileMode(profile.Name, mode)
+			table.GetCell(row, modeColumn).SetText(string(mode))
+			// Nothing else to refresh, and nothing to say in the status line: the Mode column and
+			// the badge in the content border both show the new mode, and this keypress ends in a
+			// redraw. Only a failed save is worth a message.
+			if err := app.Config.Save(); err != nil {
+				log.Error().Err(err).Msg("failed to save config after mode switch")
+				SendStatusWithDefaultTTL(
+					fmt.Sprintf("[red]failed to save config: %s", err.Error()),
+				)
+			}
+			return nil
+		}
+
+		if event.Key() == tcell.KeyEnter {
+			_, profile := profileAt()
 			if profile == nil {
 				return nil
 			}

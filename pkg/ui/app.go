@@ -58,10 +58,16 @@ type App struct {
 	// ctx is cancelled when the application exits; background work derives from it.
 	ctx context.Context
 
-	// scanning and scanCancel track the one running prefix aggregate, guarded by scanMu.
-	scanning   bool
-	scanCancel context.CancelFunc
-	scanMu     sync.Mutex
+	// jobName names the one running background walk — a prefix aggregate or a download — and is
+	// empty when none is; jobCancel stops it. Both are guarded by jobMu. See job.go.
+	jobName   string
+	jobCancel context.CancelFunc
+	jobMu     sync.Mutex
+
+	// confirm is the question waiting for a <Y>/<N>, nil when none is. It is touched only on
+	// the UI goroutine — from a keypress handler or a QueueUpdate callback — so it needs no
+	// lock. See Confirm.
+	confirm *confirmation
 
 	Selected             Selected
 	Config               *config.Config
@@ -182,6 +188,8 @@ func (app *App) Run() {
 
 	app.OpenPagesKeyHandler(registry.UI.FilteredPages)
 	app.MainOperationKeyHandler()
+	// Installed before Run: unlike SetRoot, SetAfterDrawFunc takes no application lock.
+	app.SetAfterDrawFunc(app.drawModeBadge)
 
 	if err := app.SetRoot(app.Layout.Content, true).Run(); err != nil {
 		log.Error().Err(err).Msg("failed application execution")

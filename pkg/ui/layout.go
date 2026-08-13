@@ -161,7 +161,9 @@ func InitBorders() {
 	}
 }
 
-// SetSelected shows the name of the selected profile in the header.
+// SetSelected shows the name of the selected profile in the header. The mode it is worked with is
+// not shown here but in the content area's border, where it stays in sight on every page — see
+// drawModeBadge.
 func (l *Layout) SetSelected(profile *awscfg.Profile) {
 	text := ""
 	if profile != nil {

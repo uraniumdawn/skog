@@ -16,4 +16,17 @@ skog:
     # hits the cap is marked with ">", its figures being a floor rather than a total. Set to 0 for
     # no cap — every aggregate is then exact, however long the walk takes, and <Esc> ends it.
     max_scanned_keys: 100000
+  download:
+    # Where <d> puts what it fetches. An object lands in <dir>/<bucket>/<key>; on a folder row <d>
+    # asks first, then brings every key under that prefix along, hierarchy and all. "~" and a
+    # relative path resolve against your home directory, environment variables are expanded, and a
+    # file already there is overwritten. A folder download stops at s3.max_scanned_keys, and <Esc>
+    # ends it early — the object in flight is discarded rather than left half-written.
+    dir: "~/Downloads/skog"
+  # How much skog may change what a profile points at. <Tab> on the Profiles page switches the
+  # highlighted profile between read-only (a modifying action is refused), regular (it asks in the
+  # status line first, <Y> to go ahead) and yolo (it runs on the spot). A profile not listed is
+  # regular, so a production profile is worth pinning to read-only and a local one to yolo.
+  modes:
+    minio-prod: read-only
   style: examples/style/uranium_v3.yaml
