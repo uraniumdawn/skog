@@ -48,12 +48,6 @@ func newBadgeApp(
 	registry := NewPagesRegistry(app.Colors)
 	app.Layout = NewLayout(registry, app.Colors)
 
-	// Added straight to Pages: AddToPagesRegistry needs the cache and appends a timestamp to the
-	// title, neither of which the badge cares about.
-	page := tview.NewTable()
-	page.SetBorder(true).SetTitle(" Profiles ").SetTitleAlign(tview.AlignLeft)
-	registry.UI.Pages.AddAndSwitchToPage(Profiles, page, true)
-
 	screen := tcell.NewSimulationScreen("UTF-8")
 	t.Cleanup(screen.Fini)
 
@@ -64,9 +58,22 @@ func newBadgeApp(
 
 	app.SetAfterDrawFunc(app.drawModeBadge)
 	app.SetRoot(app.Layout.Content, true)
-	app.ForceDraw()
+	showPage(app, Profiles, " Profiles ")
 
 	return app, screen
+}
+
+// showPage adds a bordered page with the given title and brings it to the front.
+//
+// It goes straight to Pages: AddToPagesRegistry needs the cache and appends a timestamp to the
+// title, neither of which the badge cares about. The title alignment is left at tview's default —
+// centred — because that is what skog's pages use, and it is what keeps the title clear of the
+// badge now that the badge is painted at the left.
+func showPage(app *App, name, title string) {
+	page := tview.NewTable()
+	page.SetBorder(true).SetTitle(title)
+	app.Layout.PagesRegistry.UI.Pages.AddAndSwitchToPage(name, page, true)
+	app.ForceDraw()
 }
 
 // screenRow returns row y of the screen as text. A cell nothing was drawn into holds no runes at
@@ -100,18 +107,18 @@ func screenFg(t *testing.T, screen tcell.SimulationScreen, x, y int) tcell.Color
 	return fg
 }
 
-// The badge belongs at the right end of the content area's top border line, and the page title
-// keeps the left end of the same line.
-func TestModeBadgeIsRightAlignedOnTheContentBorder(t *testing.T) {
+// The mode and the title are one label: the badge is painted immediately to the left of the title,
+// not stranded at the end of the line.
+func TestModeBadgeSitsBesideTheTitle(t *testing.T) {
 	_, screen := newBadgeApp(t, config.Yolo, 80, 24)
 
 	row := screenRow(t, screen, headerHeight)
-	want := " yolo " + string(tview.Borders.TopRight)
-	if !strings.HasSuffix(row, want) {
-		t.Errorf("content border row = %q, want it to end with %q", row, want)
+	if want := " [yolo] Profiles "; !strings.Contains(row, want) {
+		t.Errorf("content border row = %q, want it to contain %q", row, want)
 	}
-	if !strings.Contains(row, " Profiles ") {
-		t.Errorf("content border row = %q, want the page title kept", row)
+	// Beside the title, not in the corner.
+	if strings.HasPrefix(row, string(tview.Borders.TopLeft)+" [yolo]") {
+		t.Errorf("content border row = %q, want the badge away from the corner", row)
 	}
 }
 
@@ -121,11 +128,39 @@ func TestModeBadgeTextPerMode(t *testing.T) {
 			_, screen := newBadgeApp(t, mode, 80, 24)
 
 			row := screenRow(t, screen, headerHeight)
-			want := " " + string(mode) + " " + string(tview.Borders.TopRight)
-			if !strings.HasSuffix(row, want) {
-				t.Errorf("content border row = %q, want it to end with %q", row, want)
+			want := " [" + string(mode) + "] Profiles "
+			if !strings.Contains(row, want) {
+				t.Errorf("content border row = %q, want it to contain %q", row, want)
 			}
 		})
+	}
+}
+
+// A page with no title has nothing to sit beside; the mode is still worth showing.
+func TestModeBadgeOnAnUntitledPage(t *testing.T) {
+	app, screen := newBadgeApp(t, config.Yolo, 80, 24)
+	showPage(app, "untitled", "")
+
+	row := screenRow(t, screen, headerHeight)
+	if want := string(tview.Borders.TopLeft) + " [yolo]"; !strings.HasPrefix(row, want) {
+		t.Errorf("content border row = %q, want it to start with %q", row, want)
+	}
+}
+
+// A wide title on a narrow terminal reaches the badge's cells. The badge paints last, so it would
+// eat the beginning of the title — the resource name — and leave the timestamp. The title wins
+// that fight.
+func TestModeBadgeStaysOffWhenItWouldEatTheTitle(t *testing.T) {
+	app, screen := newBadgeApp(t, config.Yolo, 44, 24)
+	title := " Streams [2026-08-14T10:15:50] "
+	showPage(app, "streams", title)
+
+	row := screenRow(t, screen, headerHeight)
+	if strings.Contains(row, "[yolo]") {
+		t.Errorf("content border row = %q, want no badge over the title", row)
+	}
+	if !strings.Contains(row, strings.TrimSpace(title)) {
+		t.Errorf("content border row = %q, want the whole title %q", row, title)
 	}
 }
 
@@ -133,18 +168,26 @@ func TestModeBadgeTextPerMode(t *testing.T) {
 func TestModeBadgeColorsOnlyItself(t *testing.T) {
 	app, screen := newBadgeApp(t, config.Yolo, 80, 24)
 
-	_, _, width, _ := app.Layout.PagesRegistry.UI.Pages.GetRect()
+	pages := app.Layout.PagesRegistry.UI.Pages
+	x0, _, width, _ := pages.GetRect()
+	_, front := pages.GetFrontPage()
 	badge := tview.TaggedStringWidth(modeBadgeText(config.Yolo))
-	wantBadge := tcell.GetColor(app.Colors.Skog.Mode.Yolo)
+	start, titled := titleStart(front, x0, width)
+	if !titled {
+		t.Fatalf("the test page has no title to sit beside")
+	}
+	at := start - badge
 
-	for x := width - modeBadgeMargin - badge; x < width-modeBadgeMargin; x++ {
+	// The badge's own cells, its leading pad aside.
+	wantBadge := tcell.GetColor(app.Colors.Skog.Mode.Yolo)
+	for x := at + 1; x < at+badge; x++ {
 		if got := screenFg(t, screen, x, headerHeight); got != wantBadge {
 			t.Fatalf("badge cell %d color = %v, want %v", x, got, wantBadge)
 		}
 	}
 
 	wantBorder := tcell.GetColor(app.Colors.Skog.Border)
-	if got := screenFg(t, screen, width-1, headerHeight); got != wantBorder {
+	if got := screenFg(t, screen, x0, headerHeight); got != wantBorder {
 		t.Errorf("corner color = %v, want the border's %v", got, wantBorder)
 	}
 }
@@ -176,7 +219,7 @@ func TestModeBadgeFollowsInlineSearch(t *testing.T) {
 		t.Errorf("row %d = %q, want the badge gone from the old position", headerHeight, row)
 	}
 	moved := headerHeight + searchHeight
-	if row := screenRow(t, screen, moved); !strings.Contains(row, " yolo ") {
+	if row := screenRow(t, screen, moved); !strings.Contains(row, " [yolo] Profiles ") {
 		t.Errorf("row %d = %q, want the badge to have moved there", moved, row)
 	}
 }
@@ -186,20 +229,30 @@ func TestModeBadgeSurvivesAModal(t *testing.T) {
 	app, screen := newBadgeApp(t, config.Yolo, 80, 24)
 
 	pages := app.Layout.PagesRegistry.UI.Pages
-	pages.AddPage(OpenedPages, app.Layout.PagesRegistry.UI.Main, true, true)
+	modal := tview.NewBox()
+	modal.SetBorder(true).SetTitle(" Opened pages ")
+	pages.AddPage(OpenedPages, modal, true, true)
 	pages.SendToFront(OpenedPages)
 	app.ForceDraw()
 
-	if row := screenRow(t, screen, headerHeight); !strings.Contains(row, " yolo ") {
+	row := screenRow(t, screen, headerHeight)
+	if !strings.Contains(row, " [yolo] Opened pages ") {
 		t.Errorf("content border row = %q, want the badge on top of the modal", row)
 	}
 }
 
-// tview.Print reads square brackets as style tags, so a bracketed badge would print as nothing.
-func TestModeBadgeTextCarriesNoStyleTags(t *testing.T) {
+// tview.Print reads square brackets as style tags, so an unescaped badge would print as nothing at
+// all. What must survive is the printed width: the mode, its brackets and the leading space.
+func TestModeBadgeTextEscapesItsBrackets(t *testing.T) {
 	for _, mode := range []config.Mode{config.ReadOnly, config.Regular, config.Yolo} {
-		if text := modeBadgeText(mode); strings.ContainsAny(text, "[]") {
-			t.Errorf("modeBadgeText(%q) = %q, want no square brackets", mode, text)
+		text := modeBadgeText(mode)
+		if want := len(" [" + string(mode) + "]"); tview.TaggedStringWidth(text) != want {
+			t.Errorf(
+				"modeBadgeText(%q) prints %d columns, want %d — the brackets were eaten",
+				mode,
+				tview.TaggedStringWidth(text),
+				want,
+			)
 		}
 	}
 }
