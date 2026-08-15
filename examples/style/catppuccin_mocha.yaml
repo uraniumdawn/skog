@@ -22,10 +22,6 @@ skog:
   selection:
     fgColor: "#1E1E2E"
     bgColor: "#89B4FA"
-  mode:
-    readOnly: "default"
-    regular: "default"
-    yolo: "#F38BA8"
   placeholder: "#585B70"
   title: "#89B4FA"
   border: "#89B4FA"
