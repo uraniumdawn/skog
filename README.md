@@ -32,6 +32,8 @@ it or delete it — from the keyboard, without leaving the terminal.
 - **Download** — `d` writes an object to `<download.dir>/<bucket>/<key>`; on a folder row it asks first, then brings every key under that prefix along, hierarchy and all. Bodies go through a temporary file and are renamed into place, so a cancelled download leaves no half-written object.
 - **Delete** — `x` removes an object, or a folder and everything under it. A recursive delete costs one request per thousand keys, takes the folder markers with it, and runs under no scanned-keys cap: stopping early would leave a level half removed while reporting it gone. A prefix that does not name a level is refused, because `data/2024` covers `data/2024-backup/` as much as `data/2024/`.
 - **Three modes, per profile** — `read-only` refuses every modifying action, `regular` asks in the status line first, `yolo` asks nothing. `Tab` on the Profiles page cycles the highlighted profile, and the badge on the content border says which mode is in force — red on `yolo`. **Keep production on `read-only` or `regular`: in `yolo` an object, or a whole prefix, is gone the moment the key lands, and S3 has nothing to roll back to.**
+- **Apache Iceberg tables** — a resource of its own, next to Profiles and S3. It walks a warehouse by prefix, marking each level's rows as a namespace or a table, and then walks the table the way Iceberg is built: its `metadata.json` documents, the snapshots one lists, the manifests of a snapshot, the files of a manifest, and finally a data file's rows in the ordinary viewer. `i` shows what a metadata version says about the table — uuid, location, partition spec, sort order, properties — and `s` its schema. Nothing modifies anything: `x` is absent from every Iceberg page, since a file removed from under a table breaks it in a way Iceberg cannot repair.
+- **Which metadata version, said plainly** — the pointer at a table's current metadata lives in the catalog, not in the bucket, so skog lists every `metadata.json` rather than opening one. The newest is marked `latest`, or `hint` where a hadoop table keeps `version-hint.text`, and the page title says which of the two it is going by. A data file opened in the viewer is titled as the file it is: position and equality deletes are not applied, so its rows are the file's rows, not the table's.
 - **Key reference** — `?` lists every key of the application, grouped by what it acts on. The keys the page in front offers are on the bottom bar at all times.
 - **Search** — `/` fuzzy-matches the rows of the page. `Enter` keeps the filter and hands the keyboard back to the list, `Esc` drops it. A filter you keep survives navigating away and back, and the page title carries it.
 - **One background job at a time** — an aggregate, a download and a delete each hold the job slot for as long as they run, so `Esc` is unambiguous about which one it ends, and your requests are not spent on rows you have stopped looking at.
@@ -65,8 +67,8 @@ Keys mean the same thing wherever they appear:
 
 ## Available Pages
 
-Press `:` for the resource menu: **Profiles** and **S3**. Everything else is reached by walking
-down from them with `l`.
+Press `:` for the resource menu: **Profiles**, **S3** and **Iceberg**. Everything else is reached
+by walking down from them with `l`.
 
 | Page | Shows | Keys it adds |
 |------|-------|--------------|
@@ -77,6 +79,17 @@ down from them with `l`.
 | **Data** | What the object holds, as a table or as its lines | `n` next batch, `s` schema, `H`/`L` scroll |
 | **Record** | One row of the table, a field to a line | `Esc` close |
 | **Schema** | The schema the file declares | `H`/`L` scroll |
+
+Under the Iceberg resource:
+
+| Page | Shows | Keys it adds |
+|------|-------|--------------|
+| **Level** | One level of a warehouse, each row a namespace or a table | `n` next batch |
+| **Table** | The table's `metadata.json` documents, newest first | `i` overview, `s` schema |
+| **Overview** | Format version, uuid, location, current snapshot, partition spec, sort order, refs, properties | `H`/`L` scroll |
+| **Snapshots** | Snapshot id, time, operation, files and records added and deleted, refs | `n` next batch |
+| **Manifests** | The manifests of a snapshot, with their file and row counts | |
+| **Files** | The data and delete files of a manifest, with partition values | `d` download, `n` next batch |
 
 ## Installation
 
@@ -98,7 +111,8 @@ go build -o skog
 mv skog /usr/local/bin/
 ```
 
-No cgo, no system libraries: the AWS SDK, the Parquet reader and the Avro reader are all Go.
+No cgo, no system libraries: the AWS SDK, the Parquet reader, the Avro reader and the Iceberg
+metadata reader are all Go.
 
 ## Getting Started
 

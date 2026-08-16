@@ -97,8 +97,8 @@ func TestDeletePrefixRefusesWhatIsNotALevel(t *testing.T) {
 				t.Errorf("%d objects deleted in %d requests, want nothing touched",
 					result.Objects, len(api.batches))
 			}
-			if api.pagedLister.calls != 0 {
-				t.Errorf("the bucket was listed %d times, want not at all", api.pagedLister.calls)
+			if api.calls != 0 {
+				t.Errorf("the bucket was listed %d times, want not at all", api.calls)
 			}
 		})
 	}

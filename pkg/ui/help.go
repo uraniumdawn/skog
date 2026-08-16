@@ -51,7 +51,7 @@ var helpSections = []helpSection{
 		{binding: "hlscroll", what: "Scroll a wide page sideways"},
 	}},
 	{"Pages", []helpRow{
-		{binding: "res", what: "Open the resources: profiles, S3"},
+		{binding: "res", what: "Open the resources: profiles, S3, Iceberg"},
 		{binding: "search", what: "Filter the rows of the page"},
 		{binding: "upd", what: "Fetch the page again"},
 		{key: "<Esc>", what: "Cancel the running job, or close a modal"},
@@ -62,6 +62,11 @@ var helpSections = []helpSection{
 		{binding: "delete", what: "Delete the object, or the folder and all under it"},
 		{binding: "more", what: "Load the next batch of a level or a file"},
 		{binding: "schema", what: "The schema the file being viewed declares"},
+	}},
+	{"Iceberg", []helpRow{
+		{binding: "down", what: "Table, snapshots, manifests, files, rows"},
+		{binding: "stat", what: "What a metadata version says about the table"},
+		{binding: "schema", what: "The schema that metadata version declares"},
 	}},
 	{"Profiles", []helpRow{
 		{binding: "select", what: "Work against the profile under the cursor"},

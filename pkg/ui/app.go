@@ -31,12 +31,15 @@ import (
 var Version = ""
 
 // Names of the pages that exist for the whole session. They double as page keys and, for
-// Profiles and S3, as the entries of the Resources modal. Pages opened per bucket or prefix
-// build their keys from the profile, bucket and key instead (see bucketsPageKey).
+// Profiles, S3 and Iceberg, as the entries of the Resources modal. Pages opened per bucket or
+// prefix build their keys from the profile, bucket and key instead (see bucketsPageKey).
 const (
 	Resources = "Resources"
 	Profiles  = "Profiles"
 	S3        = "S3"
+	// Iceberg is the resource that shows a bucket as the Apache Iceberg tables in it, rather
+	// than as the files they are made of.
+	Iceberg = "Iceberg"
 	// Record is the popup showing one row of a viewer page in full.
 	Record = "Record"
 	// Help is the modal listing every key of the application.
@@ -192,6 +195,7 @@ func (app *App) Run() {
 	app.RunStatusLineHandler(ctx, StatusLineCh)
 	app.RunProfilesEventHandler(ctx, ProfilesChannel)
 	app.RunS3EventHandler(ctx, S3Channel)
+	app.RunIcebergEventHandler(ctx, IcebergChannel)
 
 	registry := NewPagesRegistry(app.Colors)
 	app.Layout = NewLayout(registry, app.Colors)

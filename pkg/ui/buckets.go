@@ -38,12 +38,37 @@ func (app *App) Buckets() {
 			return client.ListBuckets(ctx)
 		},
 		func(buckets []s3.Bucket) {
-			app.showBuckets(pageKey, profile, buckets)
+			app.showBuckets(pageKey, profile, buckets, bucketsNav{
+				label: "buckets",
+				menu:  BucketsPageMenu,
+				open: func(bucket string) {
+					Publish(
+						S3Channel,
+						GetObjectsEventType,
+						Payload{ObjectsTarget{Bucket: bucket}, false},
+					)
+				},
+				refresh: func() {
+					Publish(S3Channel, GetBucketsEventType, Payload{nil, true})
+				},
+			})
 		},
 	)
 }
 
-func (app *App) showBuckets(pageKey, profile string, buckets []s3.Bucket) {
+// bucketsNav is what tells one bucket list from another: the same buckets are the top of the S3
+// hierarchy and the top of the Iceberg one, and only where a row leads differs.
+type bucketsNav struct {
+	// label names the page in its title, after the profile.
+	label string
+	menu  string
+	// open is what <l> on a bucket opens.
+	open func(bucket string)
+	// refresh is what <C-u> fetches again.
+	refresh func()
+}
+
+func (app *App) showBuckets(pageKey, profile string, buckets []s3.Bucket, nav bucketsNav) {
 	labelColor := tcell.GetColor(app.Colors.Skog.Label.FgColor)
 	rows := bucketRows(buckets)
 	// visible is what the table currently shows: see showObjects.
@@ -63,7 +88,7 @@ func (app *App) showBuckets(pageKey, profile string, buckets []s3.Bucket) {
 	table.SetFixed(1, 0)
 	fillBucketsTable(table, rows, labelColor)
 
-	title := fmt.Sprintf(" %s:buckets [%d] ", profile, len(rows))
+	title := fmt.Sprintf(" %s:%s [%d] ", profile, nav.label, len(rows))
 	util.SetSearchableTitle(table, title, "")
 
 	selected := func() *bucketRow {
@@ -80,18 +105,14 @@ func (app *App) showBuckets(pageKey, profile string, buckets []s3.Bucket) {
 		if entry == nil {
 			return
 		}
-		Publish(
-			S3Channel,
-			GetObjectsEventType,
-			Payload{ObjectsTarget{Bucket: entry.name}, false},
-		)
+		nav.open(entry.name)
 	}
 
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlU {
 			// See showObjects: the page being replaced is no longer worth scanning for.
 			app.CancelJob()
-			Publish(S3Channel, GetBucketsEventType, Payload{nil, true})
+			nav.refresh()
 			return nil
 		}
 
@@ -121,7 +142,7 @@ func (app *App) showBuckets(pageKey, profile string, buckets []s3.Bucket) {
 		return event
 	})
 
-	app.AddToPagesRegistry(pageKey, table, BucketsPageMenu, true)
+	app.AddToPagesRegistry(pageKey, table, nav.menu, true)
 	// The profiles are what the buckets of a profile hang off, so they are the level above.
 	app.Layout.PagesRegistry.SetPageNavigation(pageKey, func() {
 		app.SwitchToPage(Profiles)

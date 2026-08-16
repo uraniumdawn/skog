@@ -29,13 +29,13 @@ import (
 // there is no sense spending a transfer on a file that could not be shown.
 //
 // It must be called on the UI goroutine, which is where a keypress handler runs.
-func (app *App) ViewData(bucket, key string) {
-	if reason := unviewable(key); reason != "" {
+func (app *App) ViewData(target ObjectDataTarget) {
+	if reason := unviewable(target.Key); reason != "" {
 		SendStatusWithDefaultTTL(reason)
 		return
 	}
 
-	Publish(S3Channel, GetObjectDataEventType, Payload{ObjectDataTarget{bucket, key}, false})
+	Publish(S3Channel, GetObjectDataEventType, Payload{target, false})
 }
 
 // unviewable says why an object will not be opened, empty for one that will be. It is decided
@@ -160,6 +160,25 @@ func (app *App) readObject(
 	return format.Open(target.Key, body, app.Config.ViewerPageRows())
 }
 
+// leaveViewer is what <h> does on a viewer page: back to where the file was opened from.
+//
+// A file reached through the S3 hierarchy goes up to its own metadata, the level it hangs off
+// there. One reached from an Iceberg manifest goes back to that manifest — the object it is has
+// no place in that hierarchy, and showing it would be leaving one tree for the other.
+func (app *App) leaveViewer(target ObjectDataTarget) func() {
+	return func() {
+		if target.Origin != "" {
+			app.SwitchToPage(target.Origin)
+			return
+		}
+		Publish(
+			S3Channel,
+			GetObjectEventType,
+			Payload{ObjectTarget{Bucket: target.Bucket, Key: target.Key}, false},
+		)
+	}
+}
+
 // showObjectData builds the viewer page from the first batch of rows.
 func (app *App) showObjectData(
 	target ObjectDataTarget,
@@ -273,19 +292,10 @@ func (app *App) showObjectData(
 	// The reader holds the cached file open for as long as the page shows it, and the page is
 	// kept for the session; removing the page is what closes it.
 	app.Layout.PagesRegistry.SetPageCloser(pageKey, reader)
-	// Above the rows is the object they were read from, below them one row in full. The schema
+	// Above the rows is where the file was opened from, below them one row in full. The schema
 	// is off this chain: it describes the rows rather than sitting under them, and <s> is what
 	// opens it.
-	app.Layout.PagesRegistry.SetPageNavigation(pageKey,
-		func() {
-			Publish(
-				S3Channel,
-				GetObjectEventType,
-				Payload{ObjectTarget{Bucket: target.Bucket, Key: target.Key}, false},
-			)
-		},
-		openRecord,
-	)
+	app.Layout.PagesRegistry.SetPageNavigation(pageKey, app.leaveViewer(target), openRecord)
 
 	app.AssignSearch(func(text string) {
 		render(text)
@@ -462,15 +472,9 @@ func (app *App) showObjectLines(
 	// The reader holds the cached file open for as long as the page shows it, and the page is
 	// kept for the session; removing the page is what closes it.
 	app.Layout.PagesRegistry.SetPageCloser(pageKey, reader)
-	// Above the lines is the object they were read from. Nothing hangs off them: a
-	// line-oriented file declares no schema, which is the level a table has below it.
-	app.Layout.PagesRegistry.SetPageNavigation(pageKey, func() {
-		Publish(
-			S3Channel,
-			GetObjectEventType,
-			Payload{ObjectTarget{Bucket: target.Bucket, Key: target.Key}, false},
-		)
-	}, nil)
+	// Above the lines is where the file was opened from. Nothing hangs off them: a line-oriented
+	// file declares no schema, which is the level a table has below it.
+	app.Layout.PagesRegistry.SetPageNavigation(pageKey, app.leaveViewer(target), nil)
 
 	app.AssignSearch(func(text string) {
 		render(text)

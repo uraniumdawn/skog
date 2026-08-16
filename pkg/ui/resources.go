@@ -20,12 +20,15 @@ const (
 	ProfilesResourceEventType EventType = "resources:profiles"
 	// S3ResourceEventType is the event type for the S3 resource.
 	S3ResourceEventType EventType = "resources:s3"
+	// IcebergResourceEventType is the event type for the Iceberg resource.
+	IcebergResourceEventType EventType = "resources:iceberg"
 )
 
 // resourceEvents maps a Resources modal entry to the event its selection publishes.
 var resourceEvents = map[string]EventType{
 	Profiles: ProfilesResourceEventType,
 	S3:       S3ResourceEventType,
+	Iceberg:  IcebergResourceEventType,
 }
 
 // ResourcesChannel is the channel for resource events.
@@ -51,6 +54,14 @@ func (app *App) RunResourcesEventHandler(ctx context.Context, in chan Event) {
 						continue
 					}
 					Publish(S3Channel, GetBucketsEventType, Payload{nil, false})
+				case "ice", IcebergResourceEventType:
+					if !app.requireSelection(
+						app.IsProfileSelected(),
+						"[red]to perform operation, select profile",
+					) {
+						continue
+					}
+					Publish(IcebergChannel, GetIcebergBucketsEventType, Payload{nil, false})
 				default:
 					SendStatusWithDefaultTTL("invalid command")
 				}
@@ -72,6 +83,7 @@ func (app *App) NewResourcesPage() tview.Primitive {
 
 	addResource(Profiles)
 	addResource(S3)
+	addResource(Iceberg)
 
 	table.SetSelectedStyle(
 		tcell.StyleDefault.Foreground(

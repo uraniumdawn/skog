@@ -9,6 +9,7 @@ package s3
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -259,6 +260,21 @@ func (c *Client) HeadObject(ctx context.Context, bucket, key string) (*ObjectInf
 		ServerSideEncryption: string(out.ServerSideEncryption),
 		Metadata:             out.Metadata,
 	}, nil
+}
+
+// GetObject opens an object's body for reading. The body is the caller's to close.
+//
+// It is the streaming read, for the callers that parse an object as it arrives rather than
+// keeping it: the viewer goes through the body cache instead (see FetchObject).
+func (c *Client) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
+	out, err := c.api.GetObject(ctx, &awss3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out.Body, nil
 }
 
 // DeleteObject removes a single object.

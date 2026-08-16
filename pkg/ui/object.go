@@ -47,7 +47,7 @@ func (app *App) Object(target ObjectTarget) {
 					)
 				},
 				func() {
-					app.ViewData(target.Bucket, target.Key)
+					app.ViewData(ObjectDataTarget{Bucket: target.Bucket, Key: target.Key})
 				},
 			)
 		},

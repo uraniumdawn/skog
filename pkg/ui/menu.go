@@ -126,6 +126,30 @@ const (
 	ObjectLinesBatchedPageMenu = "ObjectLinesBatchedPageMenu"
 	// ObjectSchemaPageMenu is the menu of a schema page.
 	ObjectSchemaPageMenu = "ObjectSchemaPageMenu"
+	// IcebergBucketsPageMenu is the bucket list of the Iceberg resource.
+	IcebergBucketsPageMenu = "IcebergBucketsPageMenu"
+	// IcebergLevelPageMenu is one level of a warehouse: namespaces and tables.
+	IcebergLevelPageMenu = "IcebergLevelPageMenu"
+	// IcebergLevelBatchedPageMenu is that level with a batch still to load.
+	IcebergLevelBatchedPageMenu = "IcebergLevelBatchedPageMenu"
+	// IcebergTablePageMenu is a table's metadata documents, the page offering <i> for the table
+	// itself and <s> for the schema of the version under the cursor.
+	IcebergTablePageMenu = "IcebergTablePageMenu"
+	// IcebergOverviewPageMenu is the table overview.
+	IcebergOverviewPageMenu = "IcebergOverviewPageMenu"
+	// IcebergSchemaPageMenu is the schema of a metadata version.
+	IcebergSchemaPageMenu = "IcebergSchemaPageMenu"
+	// IcebergSnapshotsPageMenu is the snapshots of a metadata version.
+	IcebergSnapshotsPageMenu = "IcebergSnapshotsPageMenu"
+	// IcebergSnapshotsBatchedPageMenu is that page with snapshots still to show.
+	IcebergSnapshotsBatchedPageMenu = "IcebergSnapshotsBatchedPageMenu"
+	// IcebergManifestsPageMenu is the manifests of a snapshot.
+	IcebergManifestsPageMenu = "IcebergManifestsPageMenu"
+	// IcebergFilesPageMenu is the files of a manifest. Deleting is absent from it and from every
+	// other Iceberg page: a file removed from under a table breaks it.
+	IcebergFilesPageMenu = "IcebergFilesPageMenu"
+	// IcebergFilesBatchedPageMenu is that page with files still to show.
+	IcebergFilesBatchedPageMenu = "IcebergFilesBatchedPageMenu"
 	// RecordPageMenu is the menu of the popup showing one row in full.
 	RecordPageMenu = "RecordPageMenu"
 	// HelpPageMenu is the menu of the modal listing every key.
@@ -233,6 +257,89 @@ func NewMenu(colors *config.ColorConfig) *Menu {
 				"res",
 				"hlscroll",
 				"up",
+			},
+			IcebergBucketsPageMenu: {
+				"sel",
+				"res",
+				"search",
+				"upd",
+				"updown",
+			},
+			IcebergLevelPageMenu: {
+				"sel",
+				"res",
+				"search",
+				"upd",
+				"updown",
+			},
+			IcebergLevelBatchedPageMenu: {
+				"sel",
+				"more",
+				"res",
+				"search",
+				"upd",
+				"updown",
+			},
+			IcebergTablePageMenu: {
+				"sel",
+				"stat",
+				"schema",
+				"res",
+				"search",
+				"upd",
+				"updown",
+			},
+			IcebergOverviewPageMenu: {
+				"res",
+				"hlscroll",
+				"upd",
+				"up",
+			},
+			IcebergSchemaPageMenu: {
+				"sel",
+				"res",
+				"search",
+				"upd",
+				"up",
+			},
+			IcebergSnapshotsPageMenu: {
+				"sel",
+				"res",
+				"search",
+				"upd",
+				"updown",
+			},
+			IcebergSnapshotsBatchedPageMenu: {
+				"sel",
+				"more",
+				"res",
+				"search",
+				"upd",
+				"updown",
+			},
+			IcebergManifestsPageMenu: {
+				"sel",
+				"res",
+				"search",
+				"upd",
+				"updown",
+			},
+			IcebergFilesPageMenu: {
+				"sel",
+				"download",
+				"res",
+				"search",
+				"upd",
+				"updown",
+			},
+			IcebergFilesBatchedPageMenu: {
+				"sel",
+				"more",
+				"download",
+				"res",
+				"search",
+				"upd",
+				"updown",
 			},
 			RecordPageMenu: {
 				"sel",

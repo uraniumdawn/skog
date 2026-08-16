@@ -33,6 +33,23 @@ func (app *App) beginJob(what string) bool {
 	return true
 }
 
+// tryBeginJob claims the slot for a job nobody asked for — one a page starts on its own — and
+// reports whether it was free.
+//
+// Unlike beginJob it says nothing when it is not: a user who did not ask for this job has no
+// reason to be told it could not run, and what it would have filled in is filled in on demand
+// instead.
+func (app *App) tryBeginJob(what string) bool {
+	app.jobMu.Lock()
+	defer app.jobMu.Unlock()
+
+	if app.jobName != "" {
+		return false
+	}
+	app.jobName = what
+	return true
+}
+
 // endJob releases the job slot.
 func (app *App) endJob() {
 	app.jobMu.Lock()

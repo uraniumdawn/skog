@@ -45,6 +45,13 @@ type ObjectTarget struct {
 type ObjectDataTarget struct {
 	Bucket string
 	Key    string
+	// Origin is the page <h> leaves the viewer for, empty for a file opened from the S3
+	// hierarchy — which goes up to the object's own metadata, the level it hangs off there.
+	//
+	// A data file opened from an Iceberg manifest hangs off that manifest instead, and says so
+	// here. It is part of the viewer's page key, so the same file opened from both places is two
+	// pages over one cached body, each going back where it was opened from.
+	Origin string
 }
 
 // RunS3EventHandler processes S3 navigation events from the channel.
@@ -129,15 +136,27 @@ func (app *App) objectPageKey(target ObjectTarget) string {
 }
 
 // objectDataPageKey is the page key of an object's viewer page. The ":data" suffix keeps it
-// distinct from the object's metadata page and from a prefix of the same name.
+// distinct from the object's metadata page and from a prefix of the same name, and the origin
+// keeps a file opened from two places on two pages; see ObjectDataTarget.Origin.
 func (app *App) objectDataPageKey(target ObjectDataTarget) string {
-	return app.SelectedProfileName() + ":s3:" + s3.DisplayPath(target.Bucket, target.Key) + ":data"
+	return app.SelectedProfileName() + ":s3:" +
+		s3.DisplayPath(target.Bucket, target.Key) + ":data" + originSuffix(target.Origin)
 }
 
 // objectSchemaPageKey is the page key of the schema of the object being viewed, kept apart
 // from its rows the way the metadata page is kept apart from both.
 func (app *App) objectSchemaPageKey(target ObjectDataTarget) string {
-	return app.SelectedProfileName() + ":s3:" + s3.DisplayPath(target.Bucket, target.Key) + ":schema"
+	return app.SelectedProfileName() + ":s3:" +
+		s3.DisplayPath(target.Bucket, target.Key) + ":schema" + originSuffix(target.Origin)
+}
+
+// originSuffix is what a viewer page key carries of where it was opened from, nothing for the
+// S3 hierarchy so that today's keys are unchanged.
+func originSuffix(origin string) string {
+	if origin == "" {
+		return ""
+	}
+	return ":from:" + origin
 }
 
 // fetch runs an S3 call off the UI goroutine and hands its result to render on the UI
