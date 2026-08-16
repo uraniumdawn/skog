@@ -1,0 +1,52 @@
+skog:
+  # The AWS profile skog works with. It is written here when you select a profile on the
+  # Profiles page, so it is restored on the next start. The profile itself — its region,
+  # endpoint and credentials — is read from ~/.aws/config and ~/.aws/credentials, which skog
+  # never writes to.
+  profile: minio-prod
+  api:
+    timeout: 30 # AWS API call timeout in seconds
+  s3:
+    # Entries one request asks for, and so the rows an objects page shows at a time; <n> asks for
+    # another batch of the same size. The S3 API returns at most 1000 entries per response, so
+    # anything larger is clamped to 1000.
+    max_requested_entries: 1000
+    # Cap on the keys <i> walks when aggregating a folder or a bucket: S3 reports nothing about
+    # what a prefix holds, so the figures cost one request per thousand keys. An aggregate that
+    # hits the cap is marked with ">", its figures being a floor rather than a total. Set to 0 for
+    # no cap — every aggregate is then exact, however long the walk takes, and <Esc> ends it.
+    max_scanned_keys: 100000
+  download:
+    # Where <d> puts what it fetches. An object lands in <dir>/<bucket>/<key>; on a folder row <d>
+    # asks first, then brings every key under that prefix along, hierarchy and all. "~" and a
+    # relative path resolve against your home directory, environment variables are expanded, and a
+    # file already there is overwritten. A folder download stops at s3.max_scanned_keys, and <Esc>
+    # ends it early — the object in flight is discarded rather than left half-written.
+    dir: "~/Downloads/skog"
+  viewer:
+    # <v> shows what an object holds, without leaving skog. Parquet and Avro become a table, under
+    # the columns their schema names; .jsonl and .ndjson are shown a record to a line, as written;
+    # a .json document is laid out for reading. Any of them but parquet may be gzipped as well
+    # (events.jsonl.gz). What an object holds is taken from its extension and checked against its
+    # own first bytes, so a mislabelled key says so rather than failing as a parse error. The
+    # whole file is read, so an object over this is refused rather than started on — <d> fetches
+    # those.
+    max_object_size_mb: 256
+    # Rows one batch of the table holds; <n> adds another batch of the same size.
+    page_rows: 500
+  cache:
+    # Where <v> keeps object bodies, so opening one a second time costs no transfer. An entry is
+    # named for a digest of the profile, bucket, key and ETag it was fetched with: a changed object
+    # is a different entry and is fetched again, so what you look at is never stale. "~" and a
+    # relative path resolve against your home directory, and environment variables are expanded.
+    dir: "~/.cache/skog"
+    # What the cache may hold. Over it, the object viewed longest ago is evicted first. Set to 0
+    # for no cap, and the folder is yours to empty.
+    max_size_mb: 2048
+  # How much skog may change what a profile points at. <Tab> on the Profiles page switches the
+  # highlighted profile between read-only (a modifying action is refused), regular (it asks in the
+  # status line first, <Y> to go ahead) and yolo (it runs on the spot). A profile not listed is
+  # regular, so a production profile is worth pinning to read-only and a local one to yolo.
+  modes:
+    minio-prod: read-only
+  style: examples/style/uranium_v3.yaml

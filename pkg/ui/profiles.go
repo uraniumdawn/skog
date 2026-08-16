@@ -1,0 +1,205 @@
+// Copyright (c) Sergey Petrovsky
+// This source code is licensed under the MIT license found in the
+// LICENSE file in the root directory of this source tree.
+
+package ui
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
+	"github.com/rs/zerolog/log"
+
+	"github.com/uraniumdawn/skog/pkg/awscfg"
+	"github.com/uraniumdawn/skog/pkg/config"
+)
+
+// GetProfilesEventType opens the AWS profiles page.
+const GetProfilesEventType EventType = "profiles:get"
+
+// ProfilesChannel is the channel for profile events.
+var ProfilesChannel = make(chan Event)
+
+// activeMarker marks the selected profile in the profiles list.
+const activeMarker = "✓"
+
+const (
+	// modeColumn is the index of the "Mode" column in the profiles table, the one <Tab> switches.
+	modeColumn = 5
+	// activeColumn is the index of the "Active" column in the profiles table.
+	activeColumn = 6
+)
+
+// RunProfilesEventHandler processes profile events from the channel.
+func (app *App) RunProfilesEventHandler(ctx context.Context, in chan Event) {
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				log.Debug().Msg("shutting down profiles event handler")
+				return
+			case event := <-in:
+				if event.Type != GetProfilesEventType {
+					continue
+				}
+				app.QueueUpdateDraw(func() {
+					// Profiles come from local files, so opening the page is a re-read: cheap
+					// enough to do every time, and what picks up a profile added to ~/.aws
+					// while skog was running. There is nothing here to refresh by hand.
+					if err := app.ReloadProfiles(); err != nil {
+						log.Error().Err(err).Msg("failed to reload aws configuration")
+						SendStatusWithDefaultTTL(
+							fmt.Sprintf("[red]failed to read aws config: %s", err.Error()),
+						)
+					}
+					table := app.NewProfilesTable()
+					app.ProfilesTableInputHandler(table)
+					app.AddToPagesRegistry(Profiles, table, ProfilesPageMenu, false)
+					// Where the hierarchy starts: nothing above the profiles, and below them
+					// the buckets of the one that is selected — which is not the one the cursor
+					// is on, since selecting a profile is what <Enter> here is for.
+					app.Layout.PagesRegistry.SetPageNavigation(Profiles, nil, app.openBuckets)
+					if len(app.Profiles) == 0 {
+						SendStatusWithDefaultTTL(
+							"[red]no profiles found in " + awscfg.ConfigPath() +
+								" or " + awscfg.CredentialsPath(),
+						)
+					}
+				})
+			}
+		}
+	}()
+}
+
+// NewProfilesTable builds the table of AWS profiles discovered in ~/.aws.
+func (app *App) NewProfilesTable() *tview.Table {
+	table := tview.NewTable()
+	table.SetTitle(" Profiles ")
+	table.SetSelectable(true, false).
+		SetBorder(true).
+		SetBorderPadding(0, 0, 1, 0)
+	table.SetSelectedStyle(
+		tcell.StyleDefault.Foreground(
+			tcell.GetColor(app.Colors.Skog.Selection.FgColor),
+		).Background(
+			tcell.GetColor(app.Colors.Skog.Selection.BgColor),
+		),
+	)
+	table.SetFixed(1, 0)
+
+	labelColor := tcell.GetColor(app.Colors.Skog.Label.FgColor)
+	setProfilesTableHeader(table, labelColor)
+
+	for row, profile := range app.Profiles {
+		app.setProfileRow(table, row+1, profile)
+	}
+	return table
+}
+
+func setProfilesTableHeader(table *tview.Table, labelColor tcell.Color) {
+	headers := []string{"Name", "Region", "Endpoint", "Credentials", "Source", "Mode", "Active"}
+	for col, text := range headers {
+		table.SetCell(0, col, tview.NewTableCell(text).
+			SetSelectable(false).
+			SetTextColor(labelColor))
+	}
+}
+
+func (app *App) setProfileRow(table *tview.Table, row int, profile *awscfg.Profile) {
+	endpoint := profile.EndpointURL
+	if endpoint == "" {
+		endpoint = "aws"
+	}
+	credentials := "-"
+	if profile.HasCredentials {
+		credentials = "static keys"
+	}
+
+	table.
+		SetCell(row, 0, tview.NewTableCell(profile.Name)).
+		SetCell(row, 1, tview.NewTableCell(profile.Region)).
+		SetCell(row, 2, tview.NewTableCell(endpoint)).
+		SetCell(row, 3, tview.NewTableCell(credentials)).
+		SetCell(row, 4, tview.NewTableCell(profileSource(profile))).
+		SetCell(
+			row,
+			modeColumn,
+			tview.NewTableCell(string(app.Config.ProfileMode(profile.Name))),
+		).
+		SetCell(row, activeColumn, tview.NewTableCell(app.activeMark(profile)))
+}
+
+// activeMark returns the marker shown for the selected profile.
+func (app *App) activeMark(profile *awscfg.Profile) string {
+	if app.Selected.Profile != nil && app.Selected.Profile.Name == profile.Name {
+		return activeMarker
+	}
+	return ""
+}
+
+// profileSource names the files that declared the profile, which is what explains a profile
+// that lists no credentials of its own.
+func profileSource(profile *awscfg.Profile) string {
+	switch {
+	case profile.InConfig && profile.InCredentials:
+		return "config, credentials"
+	case profile.InCredentials:
+		return "credentials"
+	default:
+		return "config"
+	}
+}
+
+// ProfilesTableInputHandler wires the keys of the profiles table: Enter selects the profile to
+// work with, Tab switches the mode it is worked with.
+func (app *App) ProfilesTableInputHandler(table *tview.Table) {
+	// profile returns the profile the cursor is on, nil on the header or an unknown name.
+	profileAt := func() (int, *awscfg.Profile) {
+		row, _ := table.GetSelection()
+		if row < 1 || row > len(app.Profiles) {
+			return row, nil
+		}
+		return row, app.ProfileByName(table.GetCell(row, 0).Text)
+	}
+
+	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyTab {
+			row, profile := profileAt()
+			if profile == nil {
+				return nil
+			}
+
+			mode := config.NextMode(app.Config.ProfileMode(profile.Name))
+			app.Config.SetProfileMode(profile.Name, mode)
+			table.GetCell(row, modeColumn).SetText(string(mode))
+			// Nothing else to refresh, and nothing to say in the status line: the Mode column and
+			// the badge in the content border both show the new mode, and this keypress ends in a
+			// redraw. Only a failed save is worth a message.
+			if err := app.Config.Save(); err != nil {
+				log.Error().Err(err).Msg("failed to save config after mode switch")
+				SendStatusWithDefaultTTL(
+					fmt.Sprintf("[red]failed to save config: %s", err.Error()),
+				)
+			}
+			return nil
+		}
+
+		if event.Key() == tcell.KeyEnter {
+			_, profile := profileAt()
+			if profile == nil {
+				return nil
+			}
+
+			app.SelectProfile(profile, true)
+			for i, p := range app.Profiles {
+				table.GetCell(i+1, activeColumn).SetText(app.activeMark(p))
+			}
+			SendStatusWithDefaultTTL("profile " + profile.Name + " selected")
+			return nil
+		}
+
+		return event
+	})
+}

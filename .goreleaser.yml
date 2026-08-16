@@ -1,0 +1,81 @@
+version: 2
+
+project_name: skog
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: skog-macos
+    main: .
+    binary: skog
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+
+archives:
+  - id: skog-archive
+    builds:
+      - skog-macos
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
+    format: tar.gz
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Maintenance
+      regexp: '^.*?(chore|ci|docs|refactor|test)(\(.+\))??!?:.+$'
+      order: 2
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - '^Merge pull request'
+      - '^Merge branch'
+
+brews:
+  - name: skog
+    repository:
+      owner: uraniumdawn
+      name: homebrew-skog
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: uraniumdawn
+      email: sirozhaua@gmail.com
+    homepage: https://github.com/uraniumdawn/skog
+    description: "Terminal UI for AWS S3 and S3-compatible storage"
+    license: MIT
+    install: |
+      bin.install "skog"
+    test: |
+      system "#{bin}/skog", "--version"
+
