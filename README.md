@@ -80,6 +80,13 @@ down from them with `l`.
 
 ## Installation
 
+### Homebrew (macOS, Linux)
+
+```bash
+brew tap uraniumdawn/skog
+brew install skog
+```
+
 ### From source
 
 ```bash

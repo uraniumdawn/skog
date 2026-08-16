@@ -14,11 +14,6 @@ func IsKey(event *tcell.EventKey, r rune) bool {
 	return event.Key() == tcell.KeyRune && event.Rune() == r
 }
 
-// IsCtrlEnter reports whether the event is Enter with the Ctrl modifier held.
-func IsCtrlEnter(event *tcell.EventKey) bool {
-	return event.Key() == tcell.KeyEnter && event.Modifiers()&tcell.ModCtrl != 0
-}
-
 func (app *App) MainOperationKeyHandler() {
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		// tview runs the application-wide capture before the focused primitive's own, so

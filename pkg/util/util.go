@@ -8,7 +8,6 @@ package util
 import (
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -56,32 +55,6 @@ func NewResourceModal(p tview.Primitive, height int) tview.Primitive {
 			AddItem(p, height, 0, true).
 			AddItem(nil, 0, 9, false), 0, 2, true).
 		AddItem(nil, 2, 0, false)
-}
-
-// BuildTitle creates a formatted title string from parts separated by colons.
-func BuildTitle(parts ...string) string {
-	var builder strings.Builder
-	builder.WriteString(" ")
-	for i, part := range parts {
-		builder.WriteString(strings.ToLower(part))
-		if i < len(parts)-1 {
-			builder.WriteString(":")
-		}
-	}
-	builder.WriteString(" ")
-	return builder.String()
-}
-
-// BuildPageKey creates a page key string from parts separated by colons.
-func BuildPageKey(parts ...string) string {
-	var builder strings.Builder
-	for i, part := range parts {
-		builder.WriteString(strings.ToLower(part))
-		if i < len(parts)-1 {
-			builder.WriteString(":")
-		}
-	}
-	return builder.String()
 }
 
 // Titled is anything drawn in a bordered box with a title: a table, a text view.

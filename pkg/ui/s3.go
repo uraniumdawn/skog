@@ -115,8 +115,8 @@ func (app *App) bucketsPageKey() string {
 	return app.SelectedProfileName() + ":s3:buckets"
 }
 
-// objectsPageKey is the page key of one level of a bucket's hierarchy. Keys are
-// case-sensitive, so the key is built verbatim rather than through util.BuildPageKey.
+// objectsPageKey is the page key of one level of a bucket's hierarchy. S3 keys are
+// case-sensitive, so the key is built verbatim rather than lower-cased.
 func (app *App) objectsPageKey(target ObjectsTarget) string {
 	return app.SelectedProfileName() + ":s3:" + s3.DisplayPath(target.Bucket, target.Prefix)
 }

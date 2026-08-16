@@ -23,7 +23,6 @@ skog:
   selection:
     fgColor: "black"
     bgColor: "white"
-  placeholder: "grey"
   title: "white"
   border: "white"
   background: "default"

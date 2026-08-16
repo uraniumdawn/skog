@@ -22,7 +22,6 @@ skog:
   selection:
     fgColor: "#272727"
     bgColor: "#73C936"
-  placeholder: "#505050"
   title: "#73C936"
   border: "#73C936"
   background: "#272727"

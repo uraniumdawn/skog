@@ -380,18 +380,3 @@ func (app *App) versionHintText() string {
 func (app *App) resizeStatusHint() {
 	app.Layout.StatusBar.ResizeItem(app.Layout.StatusHint, len([]rune(hintText())), 0)
 }
-
-// ClearCurrentFilter clears the saved filter for the current page.
-func (app *App) ClearCurrentFilter() {
-	currentPage, _ := app.Layout.PagesRegistry.UI.Pages.GetFrontPage()
-	delete(app.CurrentFilters, currentPage)
-
-	if search, exists := app.Layout.Search[currentPage]; exists {
-		search.SetText("")
-	}
-}
-
-// ClearFilterForPage clears the saved filter for a specific page.
-func (app *App) ClearFilterForPage(pageName string) {
-	delete(app.CurrentFilters, pageName)
-}

@@ -236,10 +236,6 @@ func TestOpenRejectsAnUnsupportedFormat(t *testing.T) {
 	}
 }
 
-func itoa(i int) string {
-	return string(rune('0' + i%10))
-}
-
 // Parquet has no schema document of its own, so what is shown is its footer's tree rendered as
 // JSON: the physical type, the logical type it stands for, and the repetition that tells a
 // nullable column from a required one.

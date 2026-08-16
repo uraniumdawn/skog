@@ -67,15 +67,6 @@ func (pr *PagesRegistry) SetupPageMenus() {
 	pr.PageMenuMap[Help] = HelpPageMenu
 }
 
-func (app *App) CheckInCache(name string, onAbsent func()) {
-	_, found := app.Cache.Get(name)
-	if found {
-		app.SwitchToPage(name)
-	} else {
-		onAbsent()
-	}
-}
-
 func (app *App) AddToPagesRegistry(
 	name string,
 	component tview.Primitive,
@@ -228,15 +219,4 @@ func (pr *PagesRegistry) CloseAll() {
 	for name := range pr.Closers {
 		pr.closePage(name)
 	}
-}
-
-func (app *App) IsCurrentPageSearchable() bool {
-	currentPage, _ := app.Layout.PagesRegistry.UI.Pages.GetFrontPage()
-
-	for _, searchablePage := range app.Layout.PagesRegistry.SearchablePages {
-		if currentPage == searchablePage {
-			return true
-		}
-	}
-	return false
 }

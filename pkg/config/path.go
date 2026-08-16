@@ -72,12 +72,3 @@ func ResolveUserPath(path string) (string, error) {
 	}
 	return filepath.Join(home, path), nil
 }
-
-// GetHistoryPath returns the path to the file holding the application's usage history.
-func GetHistoryPath() (string, error) {
-	dir, err := configDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "history.yaml"), nil
-}

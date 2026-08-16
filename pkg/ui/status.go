@@ -28,11 +28,6 @@ var (
 	SpinnerFrames   = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 )
 
-// SendStatus sends a status message with the given TTL and spinner control
-func SendStatus(message string, ttl time.Duration, spinner bool) {
-	StatusLineCh <- Status{Message: message, TTL: ttl, Spinner: spinner}
-}
-
 // SendStatusWithDefaultTTL sends a status message with 10 second TTL and no spinner
 func SendStatusWithDefaultTTL(message string) {
 	StatusLineCh <- Status{Message: message, TTL: 10 * time.Second, Spinner: false}
@@ -41,11 +36,6 @@ func SendStatusWithDefaultTTL(message string) {
 // SendStatusInfinite sends a status message that never auto-clears with spinner
 func SendStatusInfinite(message string) {
 	StatusLineCh <- Status{Message: message, TTL: 0, Spinner: true}
-}
-
-// SendStatusInfinite sends a status message that never auto-clears without spinner
-func SendStatusInfiniteWithouSpinner(message string) {
-	StatusLineCh <- Status{Message: message, TTL: 0, Spinner: false}
 }
 
 // SendStatusPrompt sends a confirmation question: it never auto-clears, shows no spinner, and
