@@ -6,7 +6,7 @@ skog:
     # a time. <n> asks for another such batch. The S3 API caps a response at 1000 entries however
     # much is asked for, so higher values are clamped to 1000.
     max_requested_entries: 1000
-    # Safety cap on how many keys <s> walks when aggregating a folder or a bucket. An aggregate
+    # Safety cap on how many keys <i> walks when aggregating a folder or a bucket. An aggregate
     # that hits the cap is shown with a ">" marker, since its figures are a floor. Set to 0 for
     # no cap: every aggregate is then exact, and <Esc> is what ends a long walk.
     max_scanned_keys: 100000
@@ -16,6 +16,23 @@ skog:
     # "~" and a relative path both resolve against your home directory. An existing file of the
     # same name is overwritten. A recursive download stops at s3.max_scanned_keys.
     dir: "~/Downloads/skog"
+  viewer:
+    # Largest object the viewer will open. Parquet and Avro become a table; .jsonl and .ndjson are
+    # shown a record to a line, and a .json document is laid out for reading. Any of them but
+    # parquet may be gzipped. The viewer reads a whole file, so an object over this is refused
+    # rather than started on; <d> is what fetches something that big.
+    max_object_size_mb: 256
+    # Rows one batch of the viewer holds, and so how many <n> adds to the table.
+    page_rows: 500
+  cache:
+    # Where the viewer keeps object bodies, so viewing one a second time costs no transfer. An entry
+    # is named for a digest of the profile, bucket, key and ETag it was fetched with, so a
+    # changed object is fetched again rather than read stale. Environment variables are
+    # expanded, and "~" and a relative path both resolve against your home directory.
+    dir: "~/.cache/skog"
+    # What the cache may hold on disk. Over it, the least recently viewed object goes first.
+    # Set to 0 for no cap.
+    max_size_mb: 2048
   # How much skog may change what a profile points at, keyed by profile name. <Tab> on the
   # Profiles page switches the highlighted profile to the next mode and saves it here:
   #   read-only  a modifying action is refused

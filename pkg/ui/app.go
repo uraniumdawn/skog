@@ -21,6 +21,8 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/uraniumdawn/skog/pkg/awscfg"
+	// Aliased: the page cache above is another package of the same name.
+	objcache "github.com/uraniumdawn/skog/pkg/cache"
 	"github.com/uraniumdawn/skog/pkg/config"
 	"github.com/uraniumdawn/skog/pkg/s3"
 )
@@ -32,10 +34,13 @@ var Version = ""
 // Profiles and S3, as the entries of the Resources modal. Pages opened per bucket or prefix
 // build their keys from the profile, bucket and key instead (see bucketsPageKey).
 const (
-	Resources   = "Resources"
-	Profiles    = "Profiles"
-	S3          = "S3"
-	OpenedPages = "Opened pages"
+	Resources = "Resources"
+	Profiles  = "Profiles"
+	S3        = "S3"
+	// Record is the popup showing one row of a viewer page in full.
+	Record = "Record"
+	// Help is the modal listing every key of the application.
+	Help = "Help"
 )
 
 // ErrNoProfile is returned when an operation needs an AWS profile and none is selected.
@@ -44,7 +49,11 @@ var ErrNoProfile = errors.New("no profile selected")
 type App struct {
 	*tview.Application
 	Layout *Layout
+	// Cache remembers which pages are open. Bodies is the other cache: the object bodies the
+	// viewer has downloaded, kept on disk between sessions. It is nil when the cache folder
+	// could not be opened, which costs the viewer and nothing else.
 	Cache  *cache.Cache
+	Bodies *objcache.Cache
 
 	// Profiles are the AWS profiles discovered in ~/.aws, in the order the files declare
 	// them. They are read-only: skog never writes to the AWS configuration.
@@ -68,6 +77,9 @@ type App struct {
 	// the UI goroutine — from a keypress handler or a QueueUpdate callback — so it needs no
 	// lock. See Confirm.
 	confirm *confirmation
+
+	// record is the body of the Record popup, filled in each time a row is opened in it.
+	record *tview.TextView
 
 	Selected             Selected
 	Config               *config.Config
@@ -111,14 +123,35 @@ func NewApp() *App {
 	return &App{
 		Application: tview.NewApplication(),
 		// Pages are cached for the whole session: an opened page stays as it was until it
-		// is refreshed with Ctrl+U or removed from the opened pages.
+		// is refreshed with Ctrl+U.
 		Cache:          cache.New(cache.NoExpiration, cache.NoExpiration),
+		Bodies:         openBodyCache(cfg),
 		Profiles:       profiles,
 		S3Clients:      make(map[string]*s3.Client),
 		Config:         cfg,
 		Colors:         colors,
 		CurrentFilters: make(map[string]string),
 	}
+}
+
+// openBodyCache opens the folder the viewer keeps object bodies in, nil when it cannot.
+//
+// A cache that will not open is not worth refusing to start over: everything but the viewer
+// works without it, and the viewer says so when it is asked for.
+func openBodyCache(cfg *config.Config) *objcache.Cache {
+	dir, err := cfg.CacheDir()
+	if err != nil {
+		log.Error().Err(err).Msg("invalid cache.dir, the object viewer is unavailable")
+		return nil
+	}
+
+	bodies, err := objcache.New(dir, cfg.CacheMaxSize())
+	if err != nil {
+		log.Error().Err(err).Str("dir", dir).
+			Msg("failed to open the cache, the object viewer is unavailable")
+		return nil
+	}
+	return bodies
 }
 
 func InitLogger() {
@@ -175,18 +208,11 @@ func (app *App) Run() {
 	app.Layout.SetSelected(app.Selected.Profile)
 
 	registry.UI.Pages.AddPage(Resources, app.NewResourcesPage(), true, false)
-	registry.UI.Pages.AddPage(OpenedPages, registry.UI.Main, true, false)
+	registry.UI.Pages.AddPage(Record, app.NewRecordPage(), true, false)
+	registry.UI.Pages.AddPage(Help, app.NewHelpPage(), true, false)
 	registry.UI.Pages.ShowPage(Profiles)
 	app.Layout.Menu.SetMenu(ProfilesPageMenu)
-	registry.UI.FilteredPages.SetSelectedStyle(
-		tcell.StyleDefault.Foreground(
-			tcell.GetColor(app.Colors.Skog.Selection.FgColor),
-		).Background(
-			tcell.GetColor(app.Colors.Skog.Selection.BgColor),
-		),
-	)
 
-	app.OpenPagesKeyHandler(registry.UI.FilteredPages)
 	app.MainOperationKeyHandler()
 	// Installed before Run: unlike SetRoot, SetAfterDrawFunc takes no application lock.
 	app.SetAfterDrawFunc(app.drawModeBadge)
@@ -195,6 +221,7 @@ func (app *App) Run() {
 		log.Error().Err(err).Msg("failed application execution")
 	}
 	cancel()
+	registry.CloseAll()
 
 	log.Info().Msg("application terminated")
 }

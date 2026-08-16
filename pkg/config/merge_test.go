@@ -293,18 +293,10 @@ func TestLoadColorConfigMergesOnTopOfDefaults(t *testing.T) {
 	if got := colors.Skog.Selection.BgColor; got != "white" {
 		t.Errorf("selection.bgColor = %q, want the default %q", got, "white")
 	}
-	// A style file written before the mode badge existed still colors it.
-	if got := colors.Skog.Mode.Yolo; got != "red" {
-		t.Errorf("mode.yolo = %q, want the default %q", got, "red")
-	}
-	if got := colors.Skog.Mode.ReadOnly; got != "default" {
-		t.Errorf("mode.readOnly = %q, want the default %q", got, "default")
-	}
 }
 
-// Every example theme is a complete file, so each has to carry the mode colors too — and a hex
-// value there has to be a hex value, not a name tcell will silently resolve to its default.
-func TestExampleStylesDefineModeColors(t *testing.T) {
+// Every example theme is a complete file, and each still has to load.
+func TestExampleStylesLoad(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join("..", "..", "examples", "style", "*.yaml"))
 	if err != nil {
 		t.Fatalf("Glob() error = %v", err)
@@ -314,14 +306,8 @@ func TestExampleStylesDefineModeColors(t *testing.T) {
 	}
 
 	for _, path := range paths {
-		colors, err := LoadColorConfig(path)
-		if err != nil {
+		if _, err := LoadColorConfig(path); err != nil {
 			t.Errorf("LoadColorConfig(%s) error = %v", path, err)
-			continue
-		}
-		if colors.Skog.Mode.Yolo == "" || colors.Skog.Mode.ReadOnly == "" ||
-			colors.Skog.Mode.Regular == "" {
-			t.Errorf("%s: mode colors = %+v, want all three set", path, colors.Skog.Mode)
 		}
 	}
 }

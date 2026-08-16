@@ -54,9 +54,10 @@ const (
 )
 
 // hintText is the right-hand side of the status bar, shown whenever there is no status
-// message to display.
+// message to display. It names <?> because that is the key nothing else advertises: every
+// other key is on the bottom bar of the page it belongs to.
 func hintText() string {
-	return " skog v" + Version + " "
+	return " <?> keys · skog v" + Version + " "
 }
 
 func NewLayout(registry *PagesRegistry, colors *config.ColorConfig) *Layout {

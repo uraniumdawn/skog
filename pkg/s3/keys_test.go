@@ -57,3 +57,31 @@ func TestDisplayPath(t *testing.T) {
 		t.Errorf("DisplayPath() = %q, want %q", got, "/bucket2/")
 	}
 }
+
+func TestParent(t *testing.T) {
+	tests := []struct {
+		name   string
+		key    string
+		parent string
+		ok     bool
+	}{
+		{"nested prefix", "data/time/", "data/", true},
+		{"prefix at the root", "data/", "", true},
+		{"object under a prefix", "data/time/12.json", "data/time/", true},
+		{"object at the root", "12.json", "", true},
+		{"the root itself", "", "", false},
+		{"empty level in the key", "data//", "data/", true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			parent, ok := Parent(test.key)
+			if ok != test.ok {
+				t.Fatalf("Parent(%q) ok = %v, want %v", test.key, ok, test.ok)
+			}
+			if parent != test.parent {
+				t.Errorf("Parent(%q) = %q, want %q", test.key, parent, test.parent)
+			}
+		})
+	}
+}

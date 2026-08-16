@@ -16,6 +16,18 @@ import (
 	"github.com/uraniumdawn/skog/pkg/util"
 )
 
+// openBuckets opens the bucket list of the selected profile, which is the level below the
+// profiles page.
+func (app *App) openBuckets() {
+	if !app.requireSelection(
+		app.IsProfileSelected(),
+		"[red]to perform operation, select profile",
+	) {
+		return
+	}
+	Publish(S3Channel, GetBucketsEventType, Payload{nil, false})
+}
+
 // Buckets fetches the bucket list of the selected profile and opens it as a page.
 func (app *App) Buckets() {
 	pageKey := app.bucketsPageKey()
@@ -52,7 +64,7 @@ func (app *App) showBuckets(pageKey, profile string, buckets []s3.Bucket) {
 	fillBucketsTable(table, rows, labelColor)
 
 	title := fmt.Sprintf(" %s:buckets [%d] ", profile, len(rows))
-	util.SetSearchableTableTitle(table, title, "")
+	util.SetSearchableTitle(table, title, "")
 
 	selected := func() *bucketRow {
 		row, _ := table.GetSelection()
@@ -60,6 +72,19 @@ func (app *App) showBuckets(pageKey, profile string, buckets []s3.Bucket) {
 			return nil
 		}
 		return visible[row-1]
+	}
+
+	// open lists what the bucket the cursor is on holds, which is the level below this page.
+	open := func() {
+		entry := selected()
+		if entry == nil {
+			return
+		}
+		Publish(
+			S3Channel,
+			GetObjectsEventType,
+			Payload{ObjectsTarget{Bucket: entry.name}, false},
+		)
 	}
 
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -77,7 +102,7 @@ func (app *App) showBuckets(pageKey, profile string, buckets []s3.Bucket) {
 			return event
 		}
 
-		if IsKey(event, 's') {
+		if IsKey(event, 'i') {
 			entry := selected()
 			if entry == nil {
 				return nil
@@ -93,28 +118,19 @@ func (app *App) showBuckets(pageKey, profile string, buckets []s3.Bucket) {
 			return nil
 		}
 
-		if event.Key() == tcell.KeyEnter {
-			entry := selected()
-			if entry == nil {
-				return nil
-			}
-			Publish(
-				S3Channel,
-				GetObjectsEventType,
-				Payload{ObjectsTarget{Bucket: entry.name}, false},
-			)
-			return nil
-		}
-
 		return event
 	})
 
 	app.AddToPagesRegistry(pageKey, table, BucketsPageMenu, true)
+	// The profiles are what the buckets of a profile hang off, so they are the level above.
+	app.Layout.PagesRegistry.SetPageNavigation(pageKey, func() {
+		app.SwitchToPage(Profiles)
+	}, open)
 
 	app.AssignSearch(func(text string) {
 		visible = filterBucketRows(rows, text)
 		fillBucketsTable(table, visible, labelColor)
-		util.SetSearchableTableTitle(table, title, text)
+		util.SetSearchableTitle(table, title, text)
 		table.ScrollToBeginning()
 	})
 }

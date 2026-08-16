@@ -19,98 +19,6 @@ func IsCtrlEnter(event *tcell.EventKey) bool {
 	return event.Key() == tcell.KeyEnter && event.Modifiers()&tcell.ModCtrl != 0
 }
 
-func (app *App) OpenPagesKeyHandler(filteredTable *tview.Table) {
-	registry := app.Layout.PagesRegistry
-	searchInput := registry.UI.SearchInput
-
-	searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEsc:
-			searchInput.SetText("")
-			app.SetFocus(filteredTable)
-			return nil
-		case tcell.KeyEnter:
-			app.SetFocus(filteredTable)
-			return nil
-		}
-		return event
-	})
-
-	filteredTable.SetSelectionChangedFunc(func(row, column int) {
-		// Skip while the user is typing — Select(0,0) from RebuildFilteredPages would
-		// otherwise trigger ShowPage/SendToFront and steal focus from the search input.
-		if app.GetFocus() == searchInput {
-			return
-		}
-		if row >= 0 && row < filteredTable.GetRowCount() {
-			cell := filteredTable.GetCell(row, 1)
-			if cell != nil {
-				pageName := cell.Text
-				if _, ok := registry.PageMenuMap[pageName]; ok {
-					registry.UI.Pages.SwitchToPage(pageName)
-					registry.UI.Pages.ShowPage(OpenedPages)
-					registry.UI.Pages.SendToFront(OpenedPages)
-					// The opened-pages modal owns the bottom bar while it is on top;
-					// keep its menu regardless of which page is highlighted underneath.
-					app.Layout.Menu.SetMenu(OpenedPagesMenu)
-				}
-			}
-		}
-	})
-
-	filteredTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEsc || event.Key() == tcell.KeyEnter {
-			row, _ := filteredTable.GetSelection()
-			if row >= 0 && row < filteredTable.GetRowCount() {
-				cell := filteredTable.GetCell(row, 1)
-				if cell != nil {
-					app.SwitchToPage(cell.Text)
-				}
-			}
-			searchInput.SetText("")
-			app.HideModalPage(OpenedPages)
-			return nil
-		}
-
-		if IsKey(event, 'x') {
-			row, _ := filteredTable.GetSelection()
-			if row >= 0 && row < filteredTable.GetRowCount() {
-				cell := filteredTable.GetCell(row, 1)
-				if cell != nil {
-					pageName := cell.Text
-
-					if pageName == Profiles {
-						SendStatusWithDefaultTTL("Profiles page cannot be deleted")
-						return nil
-					}
-
-					app.RemoveFromPagesRegistry(pageName)
-					registry.RebuildFilteredPages(searchInput.GetText())
-
-					targetRow := row
-					if row > 0 {
-						targetRow = row - 1
-					}
-					if targetRow >= filteredTable.GetRowCount() {
-						targetRow = filteredTable.GetRowCount() - 1
-					}
-					if filteredTable.GetRowCount() > 0 {
-						filteredTable.Select(targetRow, 0)
-					}
-				}
-			}
-			return nil
-		}
-
-		if IsKey(event, '/') {
-			app.SetFocus(searchInput)
-			return nil
-		}
-
-		return event
-	})
-}
-
 func (app *App) MainOperationKeyHandler() {
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		// tview runs the application-wide capture before the focused primitive's own, so
@@ -131,6 +39,18 @@ func (app *App) MainOperationKeyHandler() {
 			}
 		}
 
+		// <?> is answered here and nowhere else: it is the one key that has to work on every
+		// page, including over a modal, which is where a user reaches for it.
+		if IsKey(event, '?') && !app.IsSearchInFocus() && !app.IsInputFieldInFocus() {
+			currentPage, _ := app.Layout.PagesRegistry.UI.Pages.GetFrontPage()
+			if currentPage == Help {
+				app.HideHelp()
+			} else {
+				app.ShowHelp()
+			}
+			return nil
+		}
+
 		if IsKey(event, '/') {
 			currentPage, _ := app.Layout.PagesRegistry.UI.Pages.GetFrontPage()
 			for _, searchablePage := range app.Layout.PagesRegistry.SearchablePages {
@@ -145,22 +65,18 @@ func (app *App) MainOperationKeyHandler() {
 			}
 		}
 
-		if event.Key() == tcell.KeyCtrlP && !app.IsSearchInFocus() {
-			app.ShowModalPage(OpenedPages)
-		}
-
-		if event.Key() == tcell.KeyRune && event.Rune() == 'h' && !app.IsSearchInFocus() {
-			currentPage, _ := app.Layout.PagesRegistry.UI.Pages.GetFrontPage()
-			if app.Layout.PagesRegistry.IsPersistentPage(currentPage) {
-				app.Backward()
+		// <h> and <l> walk the hierarchy the page shows: up to the level above, down into the
+		// row the cursor is on. They live here rather than on each page so that the guard
+		// against a focused input field, where these are letters being typed, is written once.
+		//
+		// A page with no level in that direction leaves the key alone rather than swallowing it:
+		// a modal in front is answering to its own keys.
+		if !app.IsSearchInFocus() && !app.IsInputFieldInFocus() {
+			if IsKey(event, 'h') && app.Ascend() {
 				return nil
 			}
-		}
 
-		if event.Key() == tcell.KeyRune && event.Rune() == 'l' && !app.IsSearchInFocus() {
-			currentPage, _ := app.Layout.PagesRegistry.UI.Pages.GetFrontPage()
-			if app.Layout.PagesRegistry.IsPersistentPage(currentPage) {
-				app.Forward()
+			if IsKey(event, 'l') && app.Descend() {
 				return nil
 			}
 		}

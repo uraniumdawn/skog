@@ -6,7 +6,7 @@ package ui
 
 import "context"
 
-// A job is a walk over the keys of a prefix: aggregating them (<s>) or downloading them (<d>).
+// A job is a walk over the keys of a prefix: aggregating them (<i>) or downloading them (<d>).
 // Unlike the single call a page is built from, it takes as many requests as the prefix has keys
 // and runs under no timeout.
 //

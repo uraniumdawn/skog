@@ -51,8 +51,6 @@ func (app *App) RunResourcesEventHandler(ctx context.Context, in chan Event) {
 						continue
 					}
 					Publish(S3Channel, GetBucketsEventType, Payload{nil, false})
-				case "q!":
-					app.Stop()
 				default:
 					SendStatusWithDefaultTTL("invalid command")
 				}

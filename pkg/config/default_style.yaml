@@ -23,12 +23,6 @@ skog:
   selection:
     fgColor: "black"
     bgColor: "white"
-  # Color of the mode badge shown in the top border line of the content area. Only 'yolo' is
-  # colored: it is the one mode that deletes without asking.
-  mode:
-    readOnly: "default"
-    regular: "default"
-    yolo: "red"
   placeholder: "grey"
   title: "white"
   border: "white"

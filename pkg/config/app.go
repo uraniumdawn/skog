@@ -32,7 +32,11 @@ type Config struct {
 		// section on a save would drop an uncapped max_scanned_keys with it.
 		S3       S3Config       `yaml:"s3"`
 		Download DownloadConfig `yaml:"download"`
-		Style    string         `yaml:"style,omitempty"`
+		Viewer   ViewerConfig   `yaml:"viewer"`
+		// Cache carries no omitempty for the same reason S3 does not: Unlimited is the zero
+		// value of its budget, and omitting the section would drop an uncapped cache with it.
+		Cache CacheConfig `yaml:"cache"`
+		Style string      `yaml:"style,omitempty"`
 		// Modes is the mode of each profile that is not in the default one, keyed by profile
 		// name. See Mode; <Tab> on the Profiles page is what writes here.
 		Modes map[string]string `yaml:"modes,omitempty"`
@@ -68,11 +72,38 @@ type DownloadConfig struct {
 	Dir string `yaml:"dir"`
 }
 
+// ViewerConfig holds what the viewer will read and how much of it is shown at a time.
+type ViewerConfig struct {
+	// MaxObjectSizeMB is the largest object the viewer will fetch. The viewer parses a whole file, so
+	// an object over this is refused rather than started on: the message names the size, and
+	// <d> is what fetches something that big.
+	MaxObjectSizeMB int `yaml:"max_object_size_mb,omitempty"`
+	// PageRows is how many rows one batch holds, and so how many <n> adds.
+	PageRows int `yaml:"page_rows,omitempty"`
+}
+
+// CacheConfig holds where object bodies are kept between views, and how much of them.
+type CacheConfig struct {
+	// Dir is the folder cached bodies are written into. Environment variables are expanded,
+	// and "~" and a relative path both resolve against the home directory, as download.dir
+	// does.
+	Dir string `yaml:"dir"`
+	// MaxSizeMB caps what the cache holds on disk, the least recently viewed object going
+	// first once it is over. Unlimited lifts the cap.
+	//
+	// It carries no omitempty: Unlimited is the zero value, and a save must not drop the key
+	// and silently restore the cap.
+	MaxSizeMB int `yaml:"max_size_mb"`
+}
+
 const (
-	// Unlimited is the MaxScannedKeys value that lifts the cap on a recursive aggregate.
+	// Unlimited is the value that lifts a cap: on the keys a recursive aggregate walks, and on
+	// what the viewer's cache holds.
 	Unlimited = 0
 	// MaxEntriesPerRequest is S3's own ceiling on a single ListObjectsV2 response.
 	MaxEntriesPerRequest = 1000
+	// bytesPerMB converts the megabytes the config is written in to the bytes the code counts.
+	bytesPerMB = 1 << 20
 )
 
 // GetAPICallTimeout returns the API call timeout duration.
@@ -93,6 +124,26 @@ func (c *Config) GetMaxScannedKeys() int {
 // DownloadDir returns the folder downloads are written into, as an absolute path.
 func (c *Config) DownloadDir() (string, error) {
 	return ResolveUserPath(c.Skog.Download.Dir)
+}
+
+// MaxViewableObjectSize returns the largest object the viewer will fetch, in bytes.
+func (c *Config) MaxViewableObjectSize() int64 {
+	return int64(c.Skog.Viewer.MaxObjectSizeMB) * bytesPerMB
+}
+
+// ViewerPageRows returns how many rows one batch of the viewer holds.
+func (c *Config) ViewerPageRows() int {
+	return c.Skog.Viewer.PageRows
+}
+
+// CacheDir returns the folder cached object bodies are kept in, as an absolute path.
+func (c *Config) CacheDir() (string, error) {
+	return ResolveUserPath(c.Skog.Cache.Dir)
+}
+
+// CacheMaxSize returns the cache's budget in bytes, zero for no cap.
+func (c *Config) CacheMaxSize() int64 {
+	return int64(c.Skog.Cache.MaxSizeMB) * bytesPerMB
 }
 
 // SelectedProfile returns the remembered profile name, empty when none was selected yet.
@@ -175,6 +226,30 @@ func validate(cfg, def *Config) {
 		log.Warn().Str("default", def.Skog.Download.Dir).
 			Msg("empty download.dir, using default")
 		cfg.Skog.Download.Dir = def.Skog.Download.Dir
+	}
+	if cfg.Skog.Viewer.MaxObjectSizeMB <= 0 {
+		log.Warn().Int("value", cfg.Skog.Viewer.MaxObjectSizeMB).
+			Int("default", def.Skog.Viewer.MaxObjectSizeMB).
+			Msg("invalid viewer.max_object_size_mb, using default")
+		cfg.Skog.Viewer.MaxObjectSizeMB = def.Skog.Viewer.MaxObjectSizeMB
+	}
+	if cfg.Skog.Viewer.PageRows <= 0 {
+		log.Warn().Int("value", cfg.Skog.Viewer.PageRows).
+			Int("default", def.Skog.Viewer.PageRows).
+			Msg("invalid viewer.page_rows, using default")
+		cfg.Skog.Viewer.PageRows = def.Skog.Viewer.PageRows
+	}
+	// An empty cache folder is no folder at all, so the viewer would have nowhere to put a body.
+	if strings.TrimSpace(cfg.Skog.Cache.Dir) == "" {
+		log.Warn().Str("default", def.Skog.Cache.Dir).Msg("empty cache.dir, using default")
+		cfg.Skog.Cache.Dir = def.Skog.Cache.Dir
+	}
+	// Unlimited is a deliberate setting, so only values below it are typos.
+	if cfg.Skog.Cache.MaxSizeMB < Unlimited {
+		log.Warn().Int("value", cfg.Skog.Cache.MaxSizeMB).
+			Int("default", def.Skog.Cache.MaxSizeMB).
+			Msg("invalid cache.max_size_mb, using default")
+		cfg.Skog.Cache.MaxSizeMB = def.Skog.Cache.MaxSizeMB
 	}
 	// Unlimited is a deliberate setting, so only values below it are typos.
 	if cfg.Skog.S3.MaxScannedKeys < Unlimited {

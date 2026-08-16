@@ -64,6 +64,16 @@ func (c *Client) DownloadObject(ctx context.Context, bucket, key, dir string) (*
 	return &Download{Objects: 1, Bytes: size, Path: path}, nil
 }
 
+// FetchObject writes one object's body to path, which is given outright rather than derived
+// from the key the way DownloadObject derives it.
+//
+// It is what fills the viewer's cache, where an entry is named for a digest of the object it
+// holds and not for its key. The write is the same one a download makes: through a temporary
+// file, renamed into place once it is whole.
+func (c *Client) FetchObject(ctx context.Context, bucket, key, path string) (int64, error) {
+	return downloadObject(ctx, c.api, bucket, key, path)
+}
+
 // DownloadPrefix writes every key under prefix, however deep, into dir, keeping the hierarchy
 // the keys describe: dir/<bucket>/<key>. prefix is empty to download a whole bucket.
 //

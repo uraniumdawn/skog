@@ -22,15 +22,29 @@ func SetTableHeaders(table *tview.Table, labelColor tcell.Color, headers ...stri
 	}
 }
 
-// NewModal centers p in a flex layout sized for a general-purpose modal.
-func NewModal(p tview.Primitive) tview.Primitive {
+// NewHelpModal centers p in a flex layout of a fixed size, sized for the key list. A terminal
+// too small for it gets what fits, which is what tview does with any item it cannot lay out
+// whole.
+func NewHelpModal(p tview.Primitive, width, height int) tview.Primitive {
 	return tview.NewFlex().
-		AddItem(nil, 0, 2, false).
+		AddItem(nil, 0, 1, false).
 		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 1, 0, false).
-			AddItem(p, 0, 2, true).
-			AddItem(nil, 0, 2, false), 0, 5, true).
-		AddItem(nil, 2, 0, false)
+			AddItem(nil, 0, 1, false).
+			AddItem(p, height, 0, true).
+			AddItem(nil, 0, 1, false), width, 0, true).
+		AddItem(nil, 0, 1, false)
+}
+
+// NewRecordModal centers p in a flex layout sized for reading one record: most of the screen,
+// since what is opened in it is what did not fit on the page behind it.
+func NewRecordModal(p tview.Primitive) tview.Primitive {
+	return tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(p, 0, 10, true).
+			AddItem(nil, 0, 1, false), 0, 10, true).
+		AddItem(nil, 0, 1, false)
 }
 
 // NewResourceModal centers p in a flex layout with a fixed height, sized for resource forms.
@@ -70,12 +84,18 @@ func BuildPageKey(parts ...string) string {
 	return builder.String()
 }
 
-// SetSearchableTableTitle sets the title of a tview.Table with an optional filter.
-func SetSearchableTableTitle(table *tview.Table, title, filter string) {
+// Titled is anything drawn in a bordered box with a title: a table, a text view.
+type Titled interface {
+	SetTitle(string) *tview.Box
+}
+
+// SetSearchableTitle sets the title of a page with an optional filter appended, so a filtered
+// page says what it is filtered by.
+func SetSearchableTitle(p Titled, title, filter string) {
 	if filter != "" {
-		table.SetTitle(fmt.Sprintf("%s[grey]/%s ", title, filter))
+		p.SetTitle(fmt.Sprintf("%s[grey]/%s ", title, filter))
 	} else {
-		table.SetTitle(title)
+		p.SetTitle(title)
 	}
 }
 

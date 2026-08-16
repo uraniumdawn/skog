@@ -62,8 +62,8 @@ func TestConfirmAnswers(t *testing.T) {
 			wantPending: true,
 		},
 		{
-			name:        "ctrl-d is ignored, so the question cannot re-ask itself",
-			event:       tcell.NewEventKey(tcell.KeyCtrlD, 0, tcell.ModNone),
+			name:        "x is ignored, so the question cannot re-ask itself",
+			event:       keyRune('x'),
 			wantPending: true,
 		},
 	}

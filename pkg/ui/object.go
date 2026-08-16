@@ -35,6 +35,21 @@ func (app *App) Object(target ObjectTarget) {
 				}),
 			)
 			app.AddToPagesRegistry(pageKey, desc, ObjectDescriptionPageMenu, false)
+			// Above an object is the level its key sits at, below it what the object holds.
+			// An object always sits somewhere, so the parent is never in doubt here.
+			parent, _ := s3.Parent(target.Key)
+			app.Layout.PagesRegistry.SetPageNavigation(pageKey,
+				func() {
+					Publish(
+						S3Channel,
+						GetObjectsEventType,
+						Payload{ObjectsTarget{Bucket: target.Bucket, Prefix: parent}, false},
+					)
+				},
+				func() {
+					app.ViewData(target.Bucket, target.Key)
+				},
+			)
 		},
 	)
 }

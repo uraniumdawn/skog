@@ -57,6 +57,10 @@ func (app *App) RunProfilesEventHandler(ctx context.Context, in chan Event) {
 					table := app.NewProfilesTable()
 					app.ProfilesTableInputHandler(table)
 					app.AddToPagesRegistry(Profiles, table, ProfilesPageMenu, false)
+					// Where the hierarchy starts: nothing above the profiles, and below them
+					// the buckets of the one that is selected — which is not the one the cursor
+					// is on, since selecting a profile is what <Enter> here is for.
+					app.Layout.PagesRegistry.SetPageNavigation(Profiles, nil, app.openBuckets)
 					if len(app.Profiles) == 0 {
 						SendStatusWithDefaultTTL(
 							"[red]no profiles found in " + awscfg.ConfigPath() +

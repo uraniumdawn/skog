@@ -147,6 +147,18 @@ func TestModeBadgeOnAnUntitledPage(t *testing.T) {
 	}
 }
 
+// Only yolo is coloured, and no style file can change that.
+func TestModeColorIsRedOnlyForYolo(t *testing.T) {
+	for _, mode := range []config.Mode{config.ReadOnly, config.Regular, config.Mode("")} {
+		if got := modeColor(mode); got != tcell.ColorDefault {
+			t.Errorf("modeColor(%q) = %v, want the default color", mode, got)
+		}
+	}
+	if got := modeColor(config.Yolo); got != tcell.ColorRed {
+		t.Errorf("modeColor(yolo) = %v, want red", got)
+	}
+}
+
 // A wide title on a narrow terminal reaches the badge's cells. The badge paints last, so it would
 // eat the beginning of the title — the resource name — and leave the timestamp. The title wins
 // that fight.
@@ -179,10 +191,9 @@ func TestModeBadgeColorsOnlyItself(t *testing.T) {
 	at := start - badge
 
 	// The badge's own cells, its leading pad aside.
-	wantBadge := tcell.GetColor(app.Colors.Skog.Mode.Yolo)
 	for x := at + 1; x < at+badge; x++ {
-		if got := screenFg(t, screen, x, headerHeight); got != wantBadge {
-			t.Fatalf("badge cell %d color = %v, want %v", x, got, wantBadge)
+		if got := screenFg(t, screen, x, headerHeight); got != tcell.ColorRed {
+			t.Fatalf("badge cell %d color = %v, want red", x, got)
 		}
 	}
 
@@ -230,13 +241,13 @@ func TestModeBadgeSurvivesAModal(t *testing.T) {
 
 	pages := app.Layout.PagesRegistry.UI.Pages
 	modal := tview.NewBox()
-	modal.SetBorder(true).SetTitle(" Opened pages ")
-	pages.AddPage(OpenedPages, modal, true, true)
-	pages.SendToFront(OpenedPages)
+	modal.SetBorder(true).SetTitle(" Record ")
+	pages.AddPage(Record, modal, true, true)
+	pages.SendToFront(Record)
 	app.ForceDraw()
 
 	row := screenRow(t, screen, headerHeight)
-	if !strings.Contains(row, " [yolo] Opened pages ") {
+	if !strings.Contains(row, " [yolo] Record ") {
 		t.Errorf("content border row = %q, want the badge on top of the modal", row)
 	}
 }

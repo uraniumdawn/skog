@@ -40,13 +40,6 @@ type ColorConfig struct {
 			FgColor string `yaml:"fgColor"`
 			BgColor string `yaml:"bgColor"`
 		} `yaml:"selection"`
-		// Mode is the color of the mode badge in the top border line of the content area, one
-		// per mode a profile can be worked with.
-		Mode struct {
-			ReadOnly string `yaml:"readOnly"`
-			Regular  string `yaml:"regular"`
-			Yolo     string `yaml:"yolo"`
-		} `yaml:"mode"`
 		Placeholder string `yaml:"placeholder"`
 		Title       string `yaml:"title"`
 		Border      string `yaml:"border"`

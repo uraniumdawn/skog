@@ -48,16 +48,14 @@ func modeBadgeText(mode config.Mode) string {
 	return " " + tview.Escape("["+string(mode)+"]")
 }
 
-// modeColor is the color the badge is painted in, from the style file.
-func (app *App) modeColor(mode config.Mode) string {
-	switch mode {
-	case config.ReadOnly:
-		return app.Colors.Skog.Mode.ReadOnly
-	case config.Yolo:
-		return app.Colors.Skog.Mode.Yolo
-	default:
-		return app.Colors.Skog.Mode.Regular
+// modeColor is the color the badge is painted in. Only yolo is coloured, and no style file can
+// change that: it is the one mode that deletes without asking, and a theme must not be able to
+// hide the warning. Every other mode takes the border's own color.
+func modeColor(mode config.Mode) tcell.Color {
+	if mode == config.Yolo {
+		return tcell.ColorRed
 	}
+	return tcell.ColorDefault
 }
 
 // drawModeBadge paints the mode into the top border line of the content area, immediately to the
@@ -112,6 +110,6 @@ func (app *App) drawModeBadge(screen tcell.Screen) {
 		y,
 		badge,
 		tview.AlignLeft,
-		tcell.GetColor(app.modeColor(mode)),
+		modeColor(mode),
 	)
 }

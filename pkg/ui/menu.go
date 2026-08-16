@@ -35,10 +35,6 @@ var keys = map[string]Pair{
 		Key:   "<Enter>",
 		Value: "Select",
 	},
-	"open": {
-		Key:   "<Enter>",
-		Value: "Open",
-	},
 	"res": {
 		Key:   "<:>",
 		Value: "Resources",
@@ -51,57 +47,59 @@ var keys = map[string]Pair{
 		Key:   "</>",
 		Value: "Search",
 	},
-	"opened": {
-		Key:   "<C-p>",
-		Value: "Opened Pages",
-	},
 	"upd": {
 		Key:   "<C-u>",
 		Value: "Update",
 	},
 	"stat": {
-		Key:   "<s>",
-		Value: "Size",
+		Key:   "<i>",
+		Value: "Info",
 	},
 	"more": {
 		Key:   "<n>",
 		Value: "Next batch",
 	},
-	"forward": {
-		Key:   "<l>",
-		Value: "Forward",
-	},
-	"b/f": {
+	// The hierarchy keys. A page that has only one level, or none, shows only the key that
+	// leads somewhere from it.
+	"updown": {
 		Key:   "<h/l>",
-		Value: "Backward/Forward",
+		Value: "Up/Open",
+	},
+	"up": {
+		Key:   "<h>",
+		Value: "Up",
+	},
+	"down": {
+		Key:   "<l>",
+		Value: "Open",
 	},
 	"hlscroll": {
 		Key:   "<H,L>",
 		Value: "Scroll Left/Right",
 	},
 	"delete": {
-		Key:   "<C-d>",
+		Key:   "<x>",
 		Value: "Delete",
 	},
 	"download": {
 		Key:   "<d>",
 		Value: "Download",
 	},
+	"schema": {
+		Key:   "<s>",
+		Value: "Schema",
+	},
 	"mode": {
 		Key:   "<Tab>",
 		Value: "Mode",
-	},
-	"remove_page": {
-		Key:   "<x>",
-		Value: "Remove page",
 	},
 	"close": {
 		Key:   "<Esc>",
 		Value: "Close",
 	},
-	"esc_confirm_opened": {
-		Key:   "<Esc, Enter>",
-		Value: "Confirm and back",
+	"help": {
+		Key:   "<?>",
+		Value: "Keys",
 	},
 }
 
@@ -109,7 +107,6 @@ var keys = map[string]Pair{
 // the keybindings shown for the currently active page.
 const (
 	ResourcesPageMenu = "ResourcesPageMenu"
-	OpenedPagesMenu   = "OpenedPagesMenu"
 	ProfilesPageMenu  = "ProfilesPageMenu"
 	BucketsPageMenu   = "BucketsPageMenu"
 	ObjectsPageMenu   = "ObjectsPageMenu"
@@ -117,6 +114,22 @@ const (
 	// the only one offering <n>.
 	ObjectsBatchedPageMenu    = "ObjectsBatchedPageMenu"
 	ObjectDescriptionPageMenu = "ObjectDescriptionPageMenu"
+	// ObjectRowsPageMenu is the menu of a file shown as a table. Only a file with a schema is,
+	// so these are the menus offering <s>.
+	ObjectRowsPageMenu = "ObjectRowsPageMenu"
+	// ObjectRowsBatchedPageMenu is the table menu of a file with rows still to read, and so
+	// one of the two offering <n>.
+	ObjectRowsBatchedPageMenu = "ObjectRowsBatchedPageMenu"
+	// ObjectLinesPageMenu is the menu of a file shown as its lines, which declares no schema.
+	ObjectLinesPageMenu = "ObjectLinesPageMenu"
+	// ObjectLinesBatchedPageMenu is the lines menu of a file with lines still to read.
+	ObjectLinesBatchedPageMenu = "ObjectLinesBatchedPageMenu"
+	// ObjectSchemaPageMenu is the menu of a schema page.
+	ObjectSchemaPageMenu = "ObjectSchemaPageMenu"
+	// RecordPageMenu is the menu of the popup showing one row in full.
+	RecordPageMenu = "RecordPageMenu"
+	// HelpPageMenu is the menu of the modal listing every key.
+	HelpPageMenu = "HelpPageMenu"
 )
 
 // NewMenu builds the keybinding bar, pre-rendering the keybinding rows for every
@@ -138,45 +151,33 @@ func NewMenu(colors *config.ColorConfig) *Menu {
 				"select",
 				"close",
 			},
-			OpenedPagesMenu: {
-				"sel",
-				"search",
-				"remove_page",
-				"esc_confirm_opened",
-			},
 			ProfilesPageMenu: {
 				"sel",
 				"select",
 				"mode",
 				"res",
-				"opened",
-				"forward",
+				"down",
 			},
 			BucketsPageMenu: {
 				"sel",
-				"open",
 				"stat",
 				"res",
 				"search",
 				"upd",
-				"opened",
-				"b/f",
+				"updown",
 			},
 			ObjectsPageMenu: {
 				"sel",
-				"open",
 				"stat",
 				"download",
 				"delete",
 				"res",
 				"search",
 				"upd",
-				"opened",
-				"b/f",
+				"updown",
 			},
 			ObjectsBatchedPageMenu: {
 				"sel",
-				"open",
 				"stat",
 				"more",
 				"download",
@@ -184,15 +185,63 @@ func NewMenu(colors *config.ColorConfig) *Menu {
 				"res",
 				"search",
 				"upd",
-				"opened",
-				"b/f",
+				"updown",
 			},
 			ObjectDescriptionPageMenu: {
 				"res",
 				"hlscroll",
-				"opened",
 				"upd",
-				"b/f",
+				"updown",
+			},
+			ObjectRowsPageMenu: {
+				"sel",
+				"schema",
+				"hlscroll",
+				"res",
+				"search",
+				"upd",
+				"updown",
+			},
+			ObjectRowsBatchedPageMenu: {
+				"sel",
+				"schema",
+				"more",
+				"hlscroll",
+				"res",
+				"search",
+				"upd",
+				"updown",
+			},
+			ObjectLinesPageMenu: {
+				"sel",
+				"hlscroll",
+				"res",
+				"search",
+				"upd",
+				"up",
+			},
+			ObjectLinesBatchedPageMenu: {
+				"sel",
+				"more",
+				"hlscroll",
+				"res",
+				"search",
+				"upd",
+				"up",
+			},
+			ObjectSchemaPageMenu: {
+				"res",
+				"hlscroll",
+				"up",
+			},
+			RecordPageMenu: {
+				"sel",
+				"up",
+				"close",
+			},
+			HelpPageMenu: {
+				"sel",
+				"close",
 			},
 		},
 		Colors: colors,

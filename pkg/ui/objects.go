@@ -6,6 +6,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -48,6 +49,74 @@ func (app *App) deleteObject(bucket, key string, done func()) {
 	)
 }
 
+// deletePrefix removes every key under a folder and calls done on the UI goroutine once the
+// level is gone. It holds the job slot for as long as it runs — a level takes one request per
+// thousand keys, which the single-call timeout does not allow for — so it is <Esc> that stops
+// it; see job.go.
+//
+// A delete that did not finish leaves the page showing keys that are no longer there, and which
+// ones went is not known here: the level is left as it is and the user is told to refresh it.
+func (app *App) deletePrefix(bucket, prefix string, done func()) {
+	path := s3.DisplayPath(bucket, prefix)
+
+	if !app.beginJob("a delete") {
+		return
+	}
+
+	ctx, cancel := context.WithCancel(app.ctx)
+	app.setJobCancel(cancel)
+
+	SendStatusInfinite("deleting " + path + " (<Esc> to cancel)")
+
+	go func() {
+		defer cancel()
+		defer app.endJob()
+
+		client, err := app.S3Client(ctx)
+		if err != nil {
+			failed("deleting "+path, err)
+			return
+		}
+
+		result, err := client.DeletePrefix(ctx, bucket, prefix, deleteProgress(path))
+		switch {
+		// A cancelled delete surfaces as whatever the transport made of it, so the context is
+		// what says the user is the one who ended it.
+		case err != nil && (errors.Is(err, context.Canceled) || ctx.Err() != nil):
+			SendStatusWithDefaultTTL(fmt.Sprintf(
+				"delete of %s cancelled, %s objects gone; <C-u> to refresh the level",
+				path,
+				util.FormatNumber(int64(result.Objects)),
+			))
+		case err != nil:
+			failed(fmt.Sprintf(
+				"deleting %s (%s objects gone; <C-u> to refresh the level)",
+				path,
+				util.FormatNumber(int64(result.Objects)),
+			), err)
+		default:
+			SendStatusWithDefaultTTL(fmt.Sprintf(
+				"deleted %s: %s objects",
+				path,
+				util.FormatNumber(int64(result.Objects)),
+			))
+			app.QueueUpdateDraw(done)
+		}
+	}()
+}
+
+// deleteProgress reports how far a recursive delete has got. A batch is up to a thousand keys,
+// so a report per batch is a report worth redrawing the status line for.
+func deleteProgress(path string) func(int) {
+	return func(done int) {
+		SendStatusInfinite(fmt.Sprintf(
+			"deleting %s — %s objects (<Esc> to cancel)",
+			path,
+			util.FormatNumber(int64(done)),
+		))
+	}
+}
+
 // moreObjects loads the next batch of an opened level and hands it to add.
 func (app *App) moreObjects(
 	path string,
@@ -88,14 +157,14 @@ func (app *App) showObjects(pageKey, path string, listing *s3.Listing) {
 	fillObjectsTable(table, rows, labelColor)
 
 	title := objectsTitle(path, len(rows))
-	util.SetSearchableTableTitle(table, title, "")
+	util.SetSearchableTitle(table, title, "")
 
 	// render redraws the table for the filter in force, which is also what a new batch needs.
 	render := func(filter string) {
 		visible = filterObjectRows(rows, filter)
 		fillObjectsTable(table, visible, labelColor)
 		title = objectsTitle(path, len(rows))
-		util.SetSearchableTableTitle(table, title, filter)
+		util.SetSearchableTitle(table, title, filter)
 	}
 
 	// selected returns the row the cursor is on, nil on the header or an empty table.
@@ -105,6 +174,44 @@ func (app *App) showObjects(pageKey, path string, listing *s3.Listing) {
 			return nil
 		}
 		return visible[row-1]
+	}
+
+	// open descends into the row the cursor is on: a folder lists the level under it, an object
+	// opens its metadata.
+	open := func() {
+		entry := selected()
+		if entry == nil {
+			return
+		}
+
+		if entry.folder {
+			Publish(
+				S3Channel,
+				GetObjectsEventType,
+				Payload{ObjectsTarget{Bucket: listing.Bucket, Prefix: entry.full}, false},
+			)
+			return
+		}
+		Publish(
+			S3Channel,
+			GetObjectEventType,
+			Payload{ObjectTarget{Bucket: listing.Bucket, Key: entry.full}, false},
+		)
+	}
+
+	// up opens the level above this one: the prefix it hangs off, or the bucket list when this
+	// is the root of a bucket.
+	up := func() {
+		parent, ok := s3.Parent(listing.Prefix)
+		if !ok {
+			Publish(S3Channel, GetBucketsEventType, Payload{nil, false})
+			return
+		}
+		Publish(
+			S3Channel,
+			GetObjectsEventType,
+			Payload{ObjectsTarget{Bucket: listing.Bucket, Prefix: parent}, false},
+		)
 	}
 
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -142,13 +249,21 @@ func (app *App) showObjects(pageKey, path string, listing *s3.Listing) {
 			return nil
 		}
 
-		if IsKey(event, 's') {
+		if IsKey(event, 'i') {
 			entry := selected()
 			if entry == nil {
 				return nil
 			}
+			// <i> is what tells the user about the row under the cursor, whatever the row is.
+			// A folder is told about in place, by walking what it holds; an object has nothing
+			// to fill in — the listing filled its cells already — so what is left to tell is
+			// its metadata, which is a page of its own.
 			if !entry.folder {
-				SendStatusWithDefaultTTL("<s> aggregates a folder; this row is an object")
+				Publish(
+					S3Channel,
+					GetObjectEventType,
+					Payload{ObjectTarget{Bucket: listing.Bucket, Key: entry.full}, false},
+				)
 				return nil
 			}
 
@@ -172,57 +287,45 @@ func (app *App) showObjects(pageKey, path string, listing *s3.Listing) {
 			return nil
 		}
 
-		if event.Key() == tcell.KeyCtrlD {
+		if IsKey(event, 'x') {
 			entry := selected()
 			if entry == nil {
 				return nil
 			}
-			if entry.folder {
-				SendStatusWithDefaultTTL("<C-d> deletes an object; this row is a folder")
-				return nil
-			}
-
 			key := entry.full
+			folder := entry.folder
 			// The row the cursor is on now, so deleting several keys one after another does not
 			// send it back to the top of the level on every re-render.
 			row, _ := table.GetSelection()
 
-			// The question names no key: one can be long enough to push the answer off the
-			// status line, and the row it acts on is the highlighted one anyway.
-			app.Modify("Delete the selected object?", func() {
-				app.deleteObject(listing.Bucket, key, func() {
-					rows = withoutKey(rows, key)
-					render(app.CurrentFilters[pageKey])
-					if count := table.GetRowCount(); count > 1 {
-						if row >= count {
-							row = count - 1
-						}
-						table.Select(row, 0)
+			// Whatever went, the row it was on goes with it.
+			gone := func() {
+				rows = withoutKey(rows, key)
+				render(app.CurrentFilters[pageKey])
+				if count := table.GetRowCount(); count > 1 {
+					if row >= count {
+						row = count - 1
 					}
-				})
+					table.Select(row, 0)
+				}
+			}
+
+			// The question names no key: one can be long enough to push the answer off the
+			// status line, and the row it acts on is the highlighted one anyway. What it does
+			// say is how far the delete reaches — a folder takes every key under it, however
+			// deep, and S3 has no undo.
+			question := "Delete the selected object?"
+			if folder {
+				question = "Delete the selected folder and everything under it?"
+			}
+
+			app.Modify(question, func() {
+				if folder {
+					app.deletePrefix(listing.Bucket, key, gone)
+					return
+				}
+				app.deleteObject(listing.Bucket, key, gone)
 			})
-			return nil
-		}
-
-		if event.Key() == tcell.KeyEnter {
-			entry := selected()
-			if entry == nil {
-				return nil
-			}
-
-			if entry.folder {
-				Publish(
-					S3Channel,
-					GetObjectsEventType,
-					Payload{ObjectsTarget{Bucket: listing.Bucket, Prefix: entry.full}, false},
-				)
-			} else {
-				Publish(
-					S3Channel,
-					GetObjectEventType,
-					Payload{ObjectTarget{Bucket: listing.Bucket, Key: entry.full}, false},
-				)
-			}
 			return nil
 		}
 
@@ -230,6 +333,7 @@ func (app *App) showObjects(pageKey, path string, listing *s3.Listing) {
 	})
 
 	app.AddToPagesRegistry(pageKey, table, objectsMenu(token), true)
+	app.Layout.PagesRegistry.SetPageNavigation(pageKey, up, open)
 
 	app.AssignSearch(func(text string) {
 		render(text)
@@ -288,7 +392,7 @@ type objectRow struct {
 // S3 already sorted by key.
 //
 // A folder starts out with unknown aggregate cells: S3 says nothing about what a prefix holds
-// until <s> walks it. An object fills them from its own metadata, except for the key count, which
+// until <i> walks it. An object fills them from its own metadata, except for the key count, which
 // only means something for a folder.
 func objectRows(listing *s3.Listing) []*objectRow {
 	rows := make([]*objectRow, 0, listing.Total())

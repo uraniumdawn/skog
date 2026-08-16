@@ -20,6 +20,8 @@ const (
 	GetObjectsEventType EventType = "s3:objects"
 	// GetObjectEventType opens a single object's metadata.
 	GetObjectEventType EventType = "s3:object"
+	// GetObjectDataEventType opens what a single object holds, as a table.
+	GetObjectDataEventType EventType = "s3:object-data"
 )
 
 // S3Channel carries every S3 navigation event: buckets, a prefix level, an object.
@@ -34,6 +36,13 @@ type ObjectsTarget struct {
 
 // ObjectTarget identifies a single object.
 type ObjectTarget struct {
+	Bucket string
+	Key    string
+}
+
+// ObjectDataTarget identifies the object a viewer page shows. It is its own type so that the
+// metadata page and the viewer page of the same object are distinct events.
+type ObjectDataTarget struct {
 	Bucket string
 	Key    string
 }
@@ -73,6 +82,16 @@ func (app *App) RunS3EventHandler(ctx context.Context, in chan Event) {
 					app.openPage(app.objectPageKey(target), event.Payload.Force, func() {
 						app.Object(target)
 					})
+
+				case GetObjectDataEventType:
+					target, ok := event.Payload.Data.(ObjectDataTarget)
+					if !ok {
+						log.Error().Msg("object data event without a target")
+						continue
+					}
+					app.openPage(app.objectDataPageKey(target), event.Payload.Force, func() {
+						app.ObjectData(target)
+					})
 				}
 			}
 		}
@@ -107,6 +126,18 @@ func (app *App) objectsPageKey(target ObjectsTarget) string {
 // would otherwise collide with.
 func (app *App) objectPageKey(target ObjectTarget) string {
 	return app.SelectedProfileName() + ":s3:" + s3.DisplayPath(target.Bucket, target.Key) + ":info"
+}
+
+// objectDataPageKey is the page key of an object's viewer page. The ":data" suffix keeps it
+// distinct from the object's metadata page and from a prefix of the same name.
+func (app *App) objectDataPageKey(target ObjectDataTarget) string {
+	return app.SelectedProfileName() + ":s3:" + s3.DisplayPath(target.Bucket, target.Key) + ":data"
+}
+
+// objectSchemaPageKey is the page key of the schema of the object being viewed, kept apart
+// from its rows the way the metadata page is kept apart from both.
+func (app *App) objectSchemaPageKey(target ObjectDataTarget) string {
+	return app.SelectedProfileName() + ":s3:" + s3.DisplayPath(target.Bucket, target.Key) + ":schema"
 }
 
 // fetch runs an S3 call off the UI goroutine and hands its result to render on the UI
